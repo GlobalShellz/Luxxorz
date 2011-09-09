@@ -1,0 +1,326 @@
+#!/usr/bin/perl
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+use local::lib;
+use local::lib;
+use Modern::Perl;
+use POE qw(Component::IRC);
+use Storable;
+use POE qw(Component::IRC::State Component::IRC::Plugin::AutoJoin Component::IRC::Plugin::Console Component::IRC::Plugin::SigFail);
+use POE::Component::IRC::Plugin::NickServID;
+use WWW::DuckDuckGo;
+use HTML::Entities;
+use POE::Component::IRC::Plugin::BotCommand;
+
+
+my $nickname = 'luxxorz';
+my $ircname  = 'karmabot';
+my $server   = '127.0.0.1';
+my $password = 'proxypass';
+my $port = '33333';
+
+my $VERSION = "0.4-dev";
+#my %karma;
+my %karma = %{retrieve('karma')};
+my %lastline;
+
+my $bindport = 6969;
+
+my %channels = (
+        '#gshellz-bots'    => '',
+        '#globalshellz'    => '',
+);
+#global owner (temp until a better auth method is implemented)
+my $boss = 'Oldsoldier';
+my %bosses = (
+                'brabo' => 'owner',
+                'Oldsoldier' => 'op',           
+                'old_soldier' => 'op',
+);
+
+
+# We create a new PoCo-IRC object
+my $irc = POE::Component::IRC->spawn(
+        nick    => $nickname,
+        ircname => $ircname,
+        server  => $server,
+        port => $port,
+        password => $password,
+) or die "Oh noooo! $!";
+
+POE::Session->create(
+        package_states => [ main => [qw(_default 
+                                        _start 
+                                        irc_001 
+                                        irc_public 
+                                        irc_join
+                                        irc_console_service 
+                                        irc_console_connect
+                                        irc_console_authed 
+                                        irc_console_close 
+                                        irc_console_rw_fail
+                                        irc_botcmd_join
+                                        irc_botcmd_part
+                                        irc_botcmd_karmatop
+                                )], ],
+        heap           => { irc  => $irc },
+);
+
+$poe_kernel->run();
+
+sub irc_join {
+        my $chan = $_[ARG1];
+        #$irc->yield(privmsg => $chan => "hi $channel!");
+}
+
+sub _start {
+        my $heap = $_[HEAP];
+
+        # retrieve our component's object from the heap where we stashed it
+        my $irc = $heap->{irc};
+
+        $irc->plugin_add('AutoJoin', POE::Component::IRC::Plugin::AutoJoin->new( Channels => \%channels ));
+        $irc->plugin_add( 'NickServID', POE::Component::IRC::Plugin::NickServID->new(
+                Password => 'nickservpass'
+        ));
+        $irc->plugin_add( 'Console' => POE::Component::IRC::Plugin::Console->new(
+                bindport => $bindport,
+                password => 'consolepass',)
+        );
+        $irc->plugin_add(
+                'SigFail' => POE::Component::IRC::Plugin::SigFail->new
+        );
+        $irc->plugin_add('BotCommand', POE::Component::IRC::Plugin::BotCommand->new(
+                Addressed => 0,
+                Prefix => '+$',
+                Commands => {
+                        join   => 'syntax: $join channame (not #channame)',
+                        part   => 'syntax: $part channame (not #channame)',
+                        karmatop => 'returns Karma list',
+         }
+        ));
+        $irc->yield( register => 'all' );
+        $irc->yield( connect  => {} );
+        return;
+}
+
+sub irc_001 {
+        my $sender = $_[SENDER];
+
+        # Since this is an irc_* event, we can get the component's object by
+        # accessing the heap of the sender. Then we register and connect to the
+        # specified server.
+        my $irc = $sender->get_heap();
+
+        print "Connected to ", $irc->server_name(), "\n";
+
+        # we join our channels
+        return;
+}
+
+# START BotCommand subs
+#  irc_botcmd_* arguments
+#ARG0 = nick!hostmask of the user who issued the command 
+#ARG1 is the name of the channel in which the command was issued
+#ARG2 is arguments passed (or undef)
+sub irc_botcmd_join {
+        my $nick = ( split /!/, $_[ARG0] )[0];
+        my $target_channel = "#$_[ARG2]";
+        my $where = $_[ARG1];
+#check to see if owner gave command, if not- complain
+        if ($bosses{$nick}){
+                $irc->yield( privmsg => $where => "Joining $target_channel at your request" );
+                $irc->yield( join => $target_channel);} else {
+                        $irc->yield( privmsg => $where => "$nick: Denied. You're not the boss of me!" );
+                }
+}
+
+sub irc_botcmd_part {
+        
+        my $nick = ( split /!/, $_[ARG0] )[0];
+        my $target_channel = "#$_[ARG2]";
+        my $where = $_[ARG1];
+        if ($bosses{$nick}){
+                $irc->yield( privmsg => $where => "Parting $target_channel at your request" );
+                $irc->yield( part => $target_channel);
+                } else {
+                        $irc->yield( privmsg => $where => "$nick: Denied. You're not the boss of me!" );
+                }
+}
+
+sub irc_botcmd_karmatop {
+        my $nick = ( split /!/, $_[ARG0] )[0];
+        my @sorted = sort { $karma{$b} <=> $karma{$a} } keys %karma;
+        $irc->yield( notice => $nick => " The Highest Scores: " );
+        $irc->yield( notice => $nick => " #1 $sorted[0] is now $karma{$sorted[0]}" );
+        $irc->yield( notice => $nick => " #2 $sorted[1] is now $karma{$sorted[1]}" );
+        $irc->yield( notice => $nick => " #3 $sorted[2] is now $karma{$sorted[2]}" );
+        $irc->yield( notice => $nick => " " );
+        $irc->yield( notice => $nick => " The Lowest Scores: " );
+        my $lowest = $#sorted + 1;
+        $irc->yield( notice => $nick => " #$lowest $sorted[-1] is now $karma{$sorted[-1]}" );
+        $lowest--;
+        $irc->yield( notice => $nick => " #$lowest $sorted[-2] is now $karma{$sorted[-2]}" );
+        $lowest--;
+        $irc->yield( notice => $nick => " #$lowest $sorted[-3] is now $karma{$sorted[-3]}" );
+}
+
+#END BotCommand subs
+
+sub irc_public {
+        my ( $sender, $who, $where, $what ) = @_[ SENDER, ARG0 .. ARG2 ];
+        my $nick = ( split /!/, $who )[0];
+        my $channel = $where->[0];
+
+#       if ( my ($rot13) = $what =~ /^rot13 (.+)/ ) {
+#               $rot13 =~ tr[a-zA-Z][n-za-mN-ZA-M];
+#               $irc->yield( privmsg => $channel => "$nick: $rot13" );
+#       }
+        $what =~ s/^\+//;
+        #print "$channel : $what\n";
+        if ( $what =~ /^(\w+)\+\+(\s|$)/ ) {
+                my $temp = lc($1);
+                my $temp2 = $1;
+                if ( lc($nick) =~ /^$temp$/) {
+                        $karma{$temp}--;
+                } else {
+                        $karma{$temp}++;
+                }
+                store \%karma, 'karma';
+                $irc->yield( privmsg => $channel => "$nick: karma for $temp2 is now $karma{$temp}" );
+        }
+        if ( $what =~ /^(\w+)--(\s|$)/ ) {
+                my $temp = lc($1);
+                $karma{$temp}--;
+                store \%karma, 'karma';
+                $irc->yield( privmsg => $channel => "$nick: karma for $1 is now $karma{$temp}" );
+        }
+        if ( $what =~ /^karma (\w+)$/ ) {
+                my $temp = lc($1);
+                if (! $karma{$temp}) {
+                        $karma{$temp} = 0;
+                }
+                $irc->yield( privmsg => $channel => "$nick: karma for $1 is: $karma{$temp}" );
+        }
+        if ( $what =~ /^karma$/ ) {
+                my $temp = lc($nick);
+                if (! $karma{$temp}) {
+                        $karma{$temp} = 0;
+                }
+                $irc->yield( privmsg => $channel => "$nick: karma for $nick is: $karma{$temp}" );
+        }
+        if ( $what =~ /^s\/(.+)\/(.+)/ ) {
+                my $temp1 = $1;
+                my $temp2 = $2;
+                $lastline{$channel} =~ s/$temp1/$temp2/g;
+                $irc->yield( privmsg => $channel => "$lastline{$channel}");
+        }
+        if ( $what =~ /^luxxorz(\s|$)/ ) {
+                        $what =~ s/^luxxorz(\s)?//;
+                        \&irc_bot_addressed("luxxorz",$nick,$channel,$what);
+        }
+        if ( $what =~ /^ddg / ) {
+                        $what =~ s/^ddg //;
+                        \&irc_bot_addressed("luxxorz",$nick,$channel,$what);
+        }
+        $lastline{$channel} = $what;
+        return;
+}
+
+ sub irc_console_service {
+     my $getsockname = $_[ARG0];
+     return;
+ }
+
+ sub irc_console_connect {
+     my ($peeradr, $peerport, $wheel_id) = @_[ARG0 .. ARG2];
+     return;
+ }
+
+ sub irc_console_authed {
+     my $wheel_id = $_[ARG0];
+     return;
+ }
+
+ sub irc_console_close {
+     my $wheel_id = $_[ARG0];
+     return;
+ }
+
+ sub irc_console_rw_fail {
+     my ($peeradr, $peerport) = @_[ARG0, ARG1];
+     return;
+ }
+
+sub irc_bot_addressed {
+        my ( $self, $nick, $channel, $msg ) = @_;
+        #my ( $nick ) = split /!/, $nickstr;
+        #$self->debug($nick.' told me "'.$msg.'" on '.$channel);
+        $self =~ s/^\+//;
+        my $reply;
+        my $zci;
+        #$irc->yield( privmsg => $channel => " |$self| |$msg|");
+        #$self->privmsg( $channel => "$nick: $msg" );
+        #try {
+                if (!$msg) {
+                        $reply = "I'm here in version ".$VERSION ;
+                #} elsif ($msg =~ /your order/i or $msg =~ /your rules/i) {
+                #       $reply = "1. Serve the public trust, 2. Protect the innocent, 3. Uphold the law, 4. .... and dont track you! http://donttrack.us/";
+                } elsif ($zci = WWW::DuckDuckGo->new->zci($msg)) {
+                        if ($zci->has_answer) {
+                                $reply = $zci->answer;
+                                $reply .= " (".$zci->answer_type.")";
+                        } elsif ($zci->has_definition) {
+                                $reply = $zci->definition;
+                                $reply .= " (".$zci->definition_source.")" if $zci->has_definition_source;
+                        } elsif ($zci->has_abstract_text) {
+                                $reply = $zci->abstract_text;
+                                $reply .= " (".$zci->abstract_source.")" if $zci->has_abstract_source;
+                        } elsif ($zci->has_heading) {
+                                $reply = $zci->heading;
+                        } else {
+                                $reply = '<irc_sigfail:FAIL>';
+                        }
+                        $reply .= " ".$zci->definition_url if $zci->has_definition_url;
+                        $reply .= " ".$zci->abstract_url if $zci->has_abstract_url;
+                } else {
+                        $reply = '0 :(';
+                }
+                $reply = decode_entities($reply);
+                $irc->yield( privmsg => $channel => "$nick: $reply");
+                #$self->privmsg( $channel => "$nick: ".$reply );
+        #} catch {
+                #$self->privmsg( $channel => "doh!" );
+        #}
+}
+
+# We registered for all events, this will produce some debug info.
+sub _default {
+        my ( $event, $args ) = @_[ ARG0 .. $#_ ];
+        my @output = ("$event: ");
+
+        for my $arg (@$args) {
+                if ( ref $arg eq 'ARRAY' ) {
+                        push( @output, '[' . join( ', ', @$arg ) . ']' );
+                }
+                else {
+                        push( @output, "'$arg'" );
+                }
+        }
+        print join ' ', @output, "\n";
+        return;
+}
+
