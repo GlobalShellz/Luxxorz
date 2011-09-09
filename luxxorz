@@ -48,7 +48,7 @@ my $boss = 'Oldsoldier';
 my %bosses = (
                 'brabo' => 'owner',
                 'Oldsoldier' => 'op',           
-                'old_soldier' => 'op',
+                'Old_Soldier' => 'op',
 );
 
 
@@ -106,6 +106,8 @@ sub _start {
         $irc->plugin_add('BotCommand', POE::Component::IRC::Plugin::BotCommand->new(
                 Addressed => 0,
                 Prefix => '+$',
+                Ignore_unknown => 1,
+                Method => 'privmsg',
                 Commands => {
                         join   => 'syntax: $join channame (not #channame)',
                         part   => 'syntax: $part channame (not #channame)',
