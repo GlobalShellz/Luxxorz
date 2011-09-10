@@ -44,10 +44,9 @@ my %channels = (
         '#globalshellz'    => '',
 );
 #global owner (temp until a better auth method is implemented)
-my $boss = 'Oldsoldier';
+
 my %bosses = (
-                'brabo' => 'owner',
-                'Oldsoldier' => 'op',           
+                'brabo' => 'owner',         
                 'Old_Soldier' => 'op',
 );
 
