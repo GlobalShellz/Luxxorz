@@ -187,12 +187,7 @@ sub irc_public {
         my $nick = ( split /!/, $who )[0];
         my $channel = $where->[0];
 
-#       if ( my ($rot13) = $what =~ /^rot13 (.+)/ ) {
-#               $rot13 =~ tr[a-zA-Z][n-za-mN-ZA-M];
-#               $irc->yield( privmsg => $channel => "$nick: $rot13" );
-#       }
         $what =~ s/^\+//;
-        #print "$channel : $what\n";
         if ( $what =~ /^(\w+)\+\+(\s|$)/ ) {
                 my $temp = lc($1);
                 my $temp2 = $1;
@@ -244,44 +239,33 @@ sub irc_public {
 
 sub irc_bot_addressed {
         my ( $self, $nick, $channel, $msg ) = @_;
-        #my ( $nick ) = split /!/, $nickstr;
-        #$self->debug($nick.' told me "'.$msg.'" on '.$channel);
         $self =~ s/^\+//;
         my $reply;
         my $zci;
-        #$irc->yield( privmsg => $channel => " |$self| |$msg|");
-        #$self->privmsg( $channel => "$nick: $msg" );
-        #try {
-                if (!$msg) {
-                        $reply = "I'm here in version ".$VERSION ;
-                #} elsif ($msg =~ /your order/i or $msg =~ /your rules/i) {
-                #       $reply = "1. Serve the public trust, 2. Protect the innocent, 3. Uphold the law, 4. .... and dont track you! http://donttrack.us/";
-                } elsif ($zci = WWW::DuckDuckGo->new->zci($msg)) {
-                        if ($zci->has_answer) {
-                                $reply = $zci->answer;
-                                $reply .= " (".$zci->answer_type.")";
-                        } elsif ($zci->has_definition) {
-                                $reply = $zci->definition;
-                                $reply .= " (".$zci->definition_source.")" if $zci->has_definition_source;
-                        } elsif ($zci->has_abstract_text) {
-                                $reply = $zci->abstract_text;
-                                $reply .= " (".$zci->abstract_source.")" if $zci->has_abstract_source;
-                        } elsif ($zci->has_heading) {
-                                $reply = $zci->heading;
-                        } else {
-                                $reply = '<irc_sigfail:FAIL>';
-                        }
-                        $reply .= " ".$zci->definition_url if $zci->has_definition_url;
-                        $reply .= " ".$zci->abstract_url if $zci->has_abstract_url;
-                } else {
-                        $reply = '0 :(';
-                }
-                $reply = decode_entities($reply);
-                $irc->yield( privmsg => $channel => "$nick: $reply");
-                #$self->privmsg( $channel => "$nick: ".$reply );
-        #} catch {
-                #$self->privmsg( $channel => "doh!" );
-        #}
+	if (!$msg) {
+		$reply = "I'm here in version ".$VERSION ;
+	} elsif ($zci = WWW::DuckDuckGo->new->zci($msg)) {
+		if ($zci->has_answer) {
+			$reply = $zci->answer;
+			$reply .= " (".$zci->answer_type.")";
+		} elsif ($zci->has_definition) {
+			$reply = $zci->definition;
+			$reply .= " (".$zci->definition_source.")" if $zci->has_definition_source;
+		} elsif ($zci->has_abstract_text) {
+			$reply = $zci->abstract_text;
+			$reply .= " (".$zci->abstract_source.")" if $zci->has_abstract_source;
+		} elsif ($zci->has_heading) {
+			$reply = $zci->heading;
+		} else {
+			$reply = '<irc_sigfail:FAIL>';
+		}
+		$reply .= " ".$zci->definition_url if $zci->has_definition_url;
+		$reply .= " ".$zci->abstract_url if $zci->has_abstract_url;
+	} else {
+		$reply = '0 :(';
+	}
+	$reply = decode_entities($reply);
+	$irc->yield( privmsg => $channel => "$nick: $reply");
 }
 
 sub irc_console_service {
