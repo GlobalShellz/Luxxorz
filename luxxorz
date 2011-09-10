@@ -142,7 +142,7 @@ sub irc_botcmd_join {
         my $nick = ( split /!/, $_[ARG0] )[0];
         my $target_channel = "#$_[ARG2]";
         my $where = $_[ARG1];
-#check to see if owner gave command, if not- complain
+	#check to see if owner gave command, if not- complain
         if ($bosses{$nick}){
                 $irc->yield( privmsg => $where => "Joining $target_channel at your request" );
                 $irc->yield( join => $target_channel);} else {
@@ -226,7 +226,7 @@ sub irc_public {
         }
         if ( $what =~ /^s\/(.+)\/(.+)/ ) {
                 my $temp1 = $1;
-                my $temp2 = $2;
+                (my $temp2 = $2) =~ s/\/$//;
                 $lastline{$channel} =~ s/$temp1/$temp2/g;
                 $irc->yield( privmsg => $channel => "$lastline{$channel}");
         }
@@ -241,31 +241,6 @@ sub irc_public {
         $lastline{$channel} = $what;
         return;
 }
-
- sub irc_console_service {
-     my $getsockname = $_[ARG0];
-     return;
- }
-
- sub irc_console_connect {
-     my ($peeradr, $peerport, $wheel_id) = @_[ARG0 .. ARG2];
-     return;
- }
-
- sub irc_console_authed {
-     my $wheel_id = $_[ARG0];
-     return;
- }
-
- sub irc_console_close {
-     my $wheel_id = $_[ARG0];
-     return;
- }
-
- sub irc_console_rw_fail {
-     my ($peeradr, $peerport) = @_[ARG0, ARG1];
-     return;
- }
 
 sub irc_bot_addressed {
         my ( $self, $nick, $channel, $msg ) = @_;
@@ -307,6 +282,31 @@ sub irc_bot_addressed {
         #} catch {
                 #$self->privmsg( $channel => "doh!" );
         #}
+}
+
+sub irc_console_service {
+	my $getsockname = $_[ARG0];
+	return;
+}
+
+sub irc_console_connect {
+	my ($peeradr, $peerport, $wheel_id) = @_[ARG0 .. ARG2];
+	return;
+}
+
+sub irc_console_authed {
+	my $wheel_id = $_[ARG0];
+	return;
+}
+
+sub irc_console_close {
+	my $wheel_id = $_[ARG0];
+	return;
+}
+
+sub irc_console_rw_fail {
+	my ($peeradr, $peerport) = @_[ARG0, ARG1];
+	return;
 }
 
 # We registered for all events, this will produce some debug info.
