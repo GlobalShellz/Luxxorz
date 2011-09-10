@@ -32,7 +32,7 @@ my $server   = '127.0.0.1';
 my $password = 'proxypass';
 my $port = '33333';
 
-my $VERSION = "0.4-dev";
+my $VERSION = "0.5-dev";
 #my %karma;
 my %karma = %{retrieve('karma')};
 my %lastline;
@@ -232,11 +232,11 @@ sub irc_public {
         }
         if ( $what =~ /^luxxorz(\s|$)/ ) {
                         $what =~ s/^luxxorz(\s)?//;
-                        \&irc_bot_addressed("luxxorz",$nick,$channel,$what);
+                        &irc_bot_addressed("luxxorz",$nick,$channel,$what);
         }
         if ( $what =~ /^ddg / ) {
                         $what =~ s/^ddg //;
-                        \&irc_bot_addressed("luxxorz",$nick,$channel,$what);
+                        &irc_bot_addressed("luxxorz",$nick,$channel,$what);
         }
         $lastline{$channel} = $what;
         return;
