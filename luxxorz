@@ -33,8 +33,15 @@ my $password = 'proxypass';
 my $port = '33333';
 
 my $VERSION = "0.5-dev";
-#my %karma;
-my %karma = %{retrieve('karma')};
+my %karma;
+#my %karma = %{retrieve('karma')};
+if (-e "karma"){
+                %karma = %{retrieve('karma')};
+                } else {
+                        my $temp = 'gshellz';       
+                        $karma{$temp}++;
+                        store \%karma, 'karma';                           
+}
 my %lastline;
 
 my $bindport = 6969;
@@ -73,7 +80,7 @@ POE::Session->create(
                                         irc_console_rw_fail
                                         irc_botcmd_join
                                         irc_botcmd_part
-                                        irc_botcmd_karmatop
+                                        irc_botcmd_karmatop                                        
                                 )], ],
         heap           => { irc  => $irc },
 );
@@ -110,7 +117,7 @@ sub _start {
                 Commands => {
                         join   => 'syntax: $join channame (not #channame)',
                         part   => 'syntax: $part channame (not #channame)',
-                        karmatop => 'returns Karma list',
+                        karmatop => 'returns Karma list',                        
          }
         ));
         $irc->yield( register => 'all' );
@@ -143,7 +150,7 @@ sub irc_botcmd_join {
         my $where = $_[ARG1];
 	#check to see if owner gave command, if not- complain
         if ($bosses{$nick}){
-                $irc->yield( privmsg => $where => "Joining $target_channel at your request" );
+                $irc->yield( notice => $where => "Joining $target_channel at your request" );
                 $irc->yield( join => $target_channel);} else {
                         $irc->yield( privmsg => $where => "$nick: Denied. You're not the boss of me!" );
                 }
@@ -155,7 +162,7 @@ sub irc_botcmd_part {
         my $target_channel = "#$_[ARG2]";
         my $where = $_[ARG1];
         if ($bosses{$nick}){
-                $irc->yield( privmsg => $where => "Parting $target_channel at your request" );
+                $irc->yield( notice => $where => "Parting $target_channel at your request" );
                 $irc->yield( part => $target_channel);
                 } else {
                         $irc->yield( privmsg => $where => "$nick: Denied. You're not the boss of me!" );
