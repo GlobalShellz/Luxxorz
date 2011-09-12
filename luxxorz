@@ -24,7 +24,7 @@ use POE::Component::IRC::Plugin::NickServID;
 use WWW::DuckDuckGo;
 use HTML::Entities;
 use POE::Component::IRC::Plugin::BotCommand;
-
+use POE::Component::IRC::Plugin::CTCP;
 
 my $nickname = 'luxxorz';
 my $ircname  = 'karmabot';
@@ -72,15 +72,14 @@ POE::Session->create(
                                         _start 
                                         irc_001 
                                         irc_public 
-                                        irc_join
-                                        irc_console_service 
+                                        irc_join                                                                               irc_console_service 
                                         irc_console_connect
                                         irc_console_authed 
                                         irc_console_close 
                                         irc_console_rw_fail
                                         irc_botcmd_join
                                         irc_botcmd_part
-                                        irc_botcmd_karmatop                                        
+                                        irc_botcmd_karmatop                                                                                
                                 )], ],
         heap           => { irc  => $irc },
 );
@@ -120,6 +119,10 @@ sub _start {
                         karmatop => 'returns Karma list',                        
          }
         ));
+         $irc->plugin_add( 'CTCP' , POE::Component::IRC::Plugin::CTCP->new(
+                version => "Luxxorz bot v". $VERSION ." Developed by the Global Shellz Team www.globalshellz.org",
+                userinfo => $ircname,               
+        ));
         $irc->yield( register => 'all' );
         $irc->yield( connect  => {} );
         return;
@@ -147,25 +150,23 @@ sub irc_001 {
 sub irc_botcmd_join {
         my $nick = ( split /!/, $_[ARG0] )[0];
         my $target_channel = "#$_[ARG2]";
-        my $where = $_[ARG1];
-	#check to see if owner gave command, if not- complain
+        #check to see if owner gave command, if not- complain
         if ($bosses{$nick}){
-                $irc->yield( notice => $where => "Joining $target_channel at your request" );
+                $irc->yield( notice => $nick => "Joining $target_channel at your request" );
                 $irc->yield( join => $target_channel);} else {
-                        $irc->yield( privmsg => $where => "$nick: Denied. You're not the boss of me!" );
+                        $irc->yield( notice => $nick => "Denied. You're not the boss of me!" );
                 }
 }
 
 sub irc_botcmd_part {
         
         my $nick = ( split /!/, $_[ARG0] )[0];
-        my $target_channel = "#$_[ARG2]";
-        my $where = $_[ARG1];
+        my $target_channel = "#$_[ARG2]";        
         if ($bosses{$nick}){
-                $irc->yield( notice => $where => "Parting $target_channel at your request" );
+                $irc->yield( notice => $nick => "Parting $target_channel at your request" );
                 $irc->yield( part => $target_channel);
                 } else {
-                        $irc->yield( privmsg => $where => "$nick: Denied. You're not the boss of me!" );
+                        $irc->yield( privmsg => $nick => "Denied. You're not the boss of me!" );
                 }
 }
 
@@ -303,7 +304,6 @@ sub irc_console_rw_fail {
 sub _default {
         my ( $event, $args ) = @_[ ARG0 .. $#_ ];
         my @output = ("$event: ");
-
         for my $arg (@$args) {
                 if ( ref $arg eq 'ARRAY' ) {
                         push( @output, '[' . join( ', ', @$arg ) . ']' );

@@ -12,4 +12,7 @@
 #
 # join/part channels
 #
+# Respond to CTCP PING, VERSION,
+#  USER INFO, CLIENTINFO, and SOURCE
+#
 ########################################
