@@ -26,16 +26,40 @@ use HTML::Entities;
 use POE::Component::IRC::Plugin::BotCommand;
 use POE::Component::IRC::Plugin::CTCP;
 use POE::Component::SSLify;
+use Config::Simple;
 
-my $nickname = 'luxxorz';
-my $ircname  = 'karmabot';
-my $server   = '127.0.0.1';
-my $password = 'proxypass';
-my $port = '33333';
+# my $nickname = 'luxxorz';
+# my $ircname  = 'karmabot';
+# my $server   = '127.0.0.1';
+# my $password = 'proxypass';
+# my $port = '33333';
 
+# init config 
+# take file name from command line, if non given use default.cfg
+# then check to see if file exists.
+
+my $myconfigfile;
+$myconfigfile= shift || 'default.cfg';
+unless (-e $myconfigfile){
+        die "please specify a vaild configuration file or restore default.cfg";
+}
+# now create config object
+my $cfg;      
+$cfg = new Config::Simple($myconfigfile);
+
+# Get configuartion vales
+my $nickname = $cfg->param("nickname");
+my $ircname  = $cfg->param("ircname");
+my $server   = $cfg->param("server");
+my $password = $cfg->param("password");
+my $port = $cfg->param("port");
+my $ssl_status = $cfg->param("UseSSL");
+my $bot_command_prefix = $cfg->param("botcommandprefix");
+
+#other globals
 my $VERSION = "0.5-dev";
 my %karma;
-#my %karma = %{retrieve('karma')};
+# check for karma file. create it if necessary
 if (-e "karma"){
                 %karma = %{retrieve('karma')};
                 } else {
@@ -66,17 +90,18 @@ my $irc = POE::Component::IRC->spawn(
         server  => $server,
         port => $port,
         password => $password,
-        UseSSL => 0,
+        UseSSL => $ssl_status,
 ) or die "Oh noooo! $!";
 
 POE::Session->create(
         package_states => [ main => [qw(_default 
                                         _start 
                                         irc_001 
-                                        irc_public 
-                                        irc_join                                                                               irc_console_service 
+                                        irc_public                                      		
+                                        irc_join
+                                        irc_console_service
                                         irc_console_connect
-                                        irc_console_authed 
+                                        irc_console_authed
                                         irc_console_close 
                                         irc_console_rw_fail
                                         irc_botcmd_join
@@ -112,7 +137,7 @@ sub _start {
         );
         $irc->plugin_add('BotCommand', POE::Component::IRC::Plugin::BotCommand->new(
                 Addressed => 0,
-                Prefix => '+$',
+                Prefix => $bot_command_prefix,
                 Ignore_unknown => 1,
                 Method => 'privmsg',
                 Commands => {
