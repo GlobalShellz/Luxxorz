@@ -1,0 +1,30 @@
+#!/usr/bin/perl
+
+use Modern::Perl;
+use local::lib;
+use POE qw(Component::IRC::State Component::IRC::Plugin::Proxy Component::IRC::Plugin::Connector);
+
+my $irc = POE::Component::IRC::State->spawn();
+
+POE::Session->create(
+	package_states => [
+		main => [ qw(_start) ],
+	],
+	heap => { irc => $irc },
+);
+
+$poe_kernel->run();
+
+sub _start {
+	my ($kernel, $heap) = @_[KERNEL, HEAP];
+	$heap->{irc}->yield( register => 'all' );
+	$heap->{proxy} = POE::Component::IRC::Plugin::Proxy->new( bindport => 33333, password => "proxypass" );
+	$heap->{irc}->plugin_add( 'Connector' => POE::Component::IRC::Plugin::Connector->new() );
+	$heap->{irc}->plugin_add( 'Proxy' => $heap->{proxy} );
+	$heap->{irc}->yield ( connect => { 
+				Nick => 'luxxorz', 
+				Server => 'irc.freenode.net' 
+			} );
+	return;
+}
+
