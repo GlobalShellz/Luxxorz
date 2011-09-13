@@ -25,6 +25,7 @@ use WWW::DuckDuckGo;
 use HTML::Entities;
 use POE::Component::IRC::Plugin::BotCommand;
 use POE::Component::IRC::Plugin::CTCP;
+use POE::Component::SSLify;
 
 my $nickname = 'luxxorz';
 my $ircname  = 'karmabot';
@@ -65,6 +66,7 @@ my $irc = POE::Component::IRC->spawn(
         server  => $server,
         port => $port,
         password => $password,
+        UseSSL => 0,
 ) or die "Oh noooo! $!";
 
 POE::Session->create(
