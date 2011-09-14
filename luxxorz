@@ -27,6 +27,10 @@ use POE::Component::IRC::Plugin::BotCommand;
 use POE::Component::IRC::Plugin::CTCP;
 use POE::Component::SSLify;
 use Config::Simple;
+use POE::Component::IRC::Plugin::Eval;
+
+
+my $VERSION = "0.6-dev";
 
 
 # init config 
@@ -51,9 +55,9 @@ my $password = $cfg->param("password");
 my $port = $cfg->param("port");
 my $ssl_status = $cfg->param("UseSSL");
 my $bot_command_prefix = $cfg->param("botcommandprefix");
+my $ctcpreply= "Luxxorz bot v". $VERSION ." Developed by the Global Shellz Team www.globalshellz.org";
 
 #other globals
-my $VERSION = "0.5-dev";
 my %karma;
 # check for karma file. create it if necessary
 if (-e "karma"){
@@ -145,8 +149,15 @@ sub _start {
          }
         ));
          $irc->plugin_add( 'CTCP' , POE::Component::IRC::Plugin::CTCP->new(
-                version => "Luxxorz bot v". $VERSION ." Developed by the Global Shellz Team www.globalshellz.org",
+                version => $ctcpreply,
                 userinfo => $ircname,               
+		clientinfo => $ctcpreply,
+		source => "For members of GlobalShellz..",
+        ));
+       $irc->plugin_add(Eval => POE::Component::IRC::Plugin::Eval->new(
+	        Server_host => '127.0.0.1',
+                Server_port => 14400,
+                Channels    => ['#gshellz-bots'],
         ));
         $irc->yield( register => 'all' );
         $irc->yield( connect  => {} );
