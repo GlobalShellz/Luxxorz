@@ -28,11 +28,6 @@ use POE::Component::IRC::Plugin::CTCP;
 use POE::Component::SSLify;
 use Config::Simple;
 
-# my $nickname = 'luxxorz';
-# my $ircname  = 'karmabot';
-# my $server   = '127.0.0.1';
-# my $password = 'proxypass';
-# my $port = '33333';
 
 # init config 
 # take file name from command line, if non given use default.cfg
@@ -41,13 +36,14 @@ use Config::Simple;
 my $myconfigfile;
 $myconfigfile= shift || 'default.cfg';
 unless (-e $myconfigfile){
-        die "please specify a vaild configuration file or restore default.cfg";
+        die "please specify a valid configuration file or restore default.cfg";
 }
+
 # now create config object
 my $cfg;      
 $cfg = new Config::Simple($myconfigfile);
 
-# Get configuartion vales
+# Get configuration vales from $cfg
 my $nickname = $cfg->param("nickname");
 my $ircname  = $cfg->param("ircname");
 my $server   = $cfg->param("server");
@@ -106,7 +102,8 @@ POE::Session->create(
                                         irc_console_rw_fail
                                         irc_botcmd_join
                                         irc_botcmd_part
-                                        irc_botcmd_karmatop                                                                                
+                                        irc_botcmd_karmatop 
+                                        irc_botcmd_devtest                                                                               
                                 )], ],
         heap           => { irc  => $irc },
 );
@@ -143,7 +140,8 @@ sub _start {
                 Commands => {
                         join   => 'syntax: $join channame (not #channame)',
                         part   => 'syntax: $part channame (not #channame)',
-                        karmatop => 'returns Karma list',                        
+                        karmatop => 'returns Karma list',
+                        devtest => '',                        
          }
         ));
          $irc->plugin_add( 'CTCP' , POE::Component::IRC::Plugin::CTCP->new(
@@ -214,6 +212,16 @@ sub irc_botcmd_karmatop {
         $irc->yield( notice => $nick => " #$lowest $sorted[-3] is now $karma{$sorted[-3]}" );
 }
 
+sub irc_botcmd_devtest{
+        my $nick = ( split /!/, $_[ARG0] )[0];
+        my $target_channel = "#$_[ARG2]";        
+        if ($bosses{$nick}){
+                $irc->yield( notice => $nick => "config file: $myconfigfile your user\@host: $_[ARG0]  " );
+                } else {
+                        $irc->yield( privmsg => $nick => "Denied. You're not the boss of me!" );
+                }
+        
+}
 #END BotCommand subs
 
 sub irc_public {
