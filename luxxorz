@@ -128,11 +128,11 @@ sub _start {
 
         $irc->plugin_add('AutoJoin', POE::Component::IRC::Plugin::AutoJoin->new( Channels => \%channels ));
         $irc->plugin_add( 'NickServID', POE::Component::IRC::Plugin::NickServID->new(
-                Password => '10st1s0s'
+                Password => 'proxypass'
         ));
         $irc->plugin_add( 'Console' => POE::Component::IRC::Plugin::Console->new(
                 bindport => $bindport,
-                password => '10st1s0s',)
+                password => 'consolepass',)
         );
         $irc->plugin_add(
                 'SigFail' => POE::Component::IRC::Plugin::SigFail->new
