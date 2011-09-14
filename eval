@@ -1,0 +1,14 @@
+#!/usr/bin/perl
+
+use App::EvalServer;
+
+my $server = App::EvalServer->new(
+	user => 'nobody',
+	port    => 14400,
+	timeout => 30,
+	daemonize => 1,
+);
+
+$server->run();
+POE::Kernel->run()
+
