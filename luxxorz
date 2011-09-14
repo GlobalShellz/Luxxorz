@@ -27,6 +27,8 @@ use POE::Component::IRC::Plugin::BotCommand;
 use POE::Component::IRC::Plugin::CTCP;
 use POE::Component::SSLify;
 use Config::Simple;
+use POE::Component::IRC::Plugin::Eval;
+
 
 # my $nickname = 'luxxorz';
 # my $ircname  = 'karmabot';
@@ -126,11 +128,11 @@ sub _start {
 
         $irc->plugin_add('AutoJoin', POE::Component::IRC::Plugin::AutoJoin->new( Channels => \%channels ));
         $irc->plugin_add( 'NickServID', POE::Component::IRC::Plugin::NickServID->new(
-                Password => 'nickservpass'
+                Password => '10st1s0s'
         ));
         $irc->plugin_add( 'Console' => POE::Component::IRC::Plugin::Console->new(
                 bindport => $bindport,
-                password => 'consolepass',)
+                password => '10st1s0s',)
         );
         $irc->plugin_add(
                 'SigFail' => POE::Component::IRC::Plugin::SigFail->new
@@ -149,6 +151,11 @@ sub _start {
          $irc->plugin_add( 'CTCP' , POE::Component::IRC::Plugin::CTCP->new(
                 version => "Luxxorz bot v". $VERSION ." Developed by the Global Shellz Team www.globalshellz.org",
                 userinfo => $ircname,               
+        ));
+       $irc->plugin_add(Eval => POE::Component::IRC::Plugin::Eval->new(
+	        Server_host => '127.0.0.1',
+                Server_port => 14400,
+                Channels    => ['#gshellz-bots'],
         ));
         $irc->yield( register => 'all' );
         $irc->yield( connect  => {} );
