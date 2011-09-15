@@ -50,12 +50,21 @@ $cfg = new Config::Simple($myconfigfile);
 # Get configuration vales from $cfg
 my $nickname = $cfg->param("nickname");
 my $ircname  = $cfg->param("ircname");
+
 my $server   = $cfg->param("server");
 my $password = $cfg->param("password");
 my $port = $cfg->param("port");
 my $ssl_status = $cfg->param("UseSSL");
+
 my $bot_command_prefix = $cfg->param("botcommandprefix");
+
 my $ctcpreply= "Luxxorz bot v". $VERSION ." Developed by the Global Shellz Team www.globalshellz.org";
+
+my $chanref = $cfg->get_block('Channels');
+my %channels = %{$chanref};
+
+my $bindport = $cfg->param("listen");
+
 
 #other globals
 my %karma;
@@ -69,12 +78,6 @@ if (-e "karma"){
 }
 my %lastline;
 
-my $bindport = 6969;
-
-my %channels = (
-        '#gshellz-bots'    => '',
-        '#globalshellz'    => '',
-);
 #global owner (temp until a better auth method is implemented)
 
 my %bosses = (
