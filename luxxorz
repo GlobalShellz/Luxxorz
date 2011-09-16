@@ -48,23 +48,23 @@ my $cfg;
 $cfg = new Config::Simple($myconfigfile);
 
 # Get configuration vales from $cfg
-my $nickname = $cfg->param("nickname");
-my $ircname  = $cfg->param("ircname");
+my $nickname = $cfg->param("Server.nickname");
+my $ircname  = $cfg->param("Server.ircname");
 
-my $server   = $cfg->param("server");
-my $password = $cfg->param("password");
-my $port = $cfg->param("port");
-my $ssl_status = $cfg->param("UseSSL");
+my $server   = $cfg->param("Server.server");
+my $password = $cfg->param("Server.password");
+my $port = $cfg->param("Server.port");
+my $ssl_status = $cfg->param("Server.UseSSL");
 
-my $bot_command_prefix = $cfg->param("botcommandprefix");
+my $bot_command_prefix = $cfg->param("Bot.botcommandprefix");
 
 my $ctcpreply= "Luxxorz bot v". $VERSION ." Developed by the Global Shellz Team www.globalshellz.org";
 
 my $chanref = $cfg->get_block('Channels');
 my %channels = %{$chanref};
 
-my $bindport = $cfg->param("listen");
-
+my $bindport = $cfg->param("Bot.listen");
+my $use_eval_server =  $cfg->param("Bot.evalserver");
 
 #other globals
 my %karma;
@@ -79,11 +79,9 @@ if (-e "karma"){
 my %lastline;
 
 #global owner (temp until a better auth method is implemented)
+my $bossref = $cfg->get_block('Owners');
+my %bosses = %{$bossref};
 
-my %bosses = (
-                'brabo' => 'owner',         
-                'Old_Soldier' => 'op',
-);
 
 
 # We create a new PoCo-IRC object
@@ -157,11 +155,14 @@ sub _start {
 		clientinfo => $ctcpreply,
 		source => "For members of GlobalShellz..",
         ));
-       $irc->plugin_add(Eval => POE::Component::IRC::Plugin::Eval->new(
-	        Server_host => '127.0.0.1',
-                Server_port => 14400,
-                Channels    => ['#gshellz-bots'],
-        ));
+        if ($use_eval_server eq '1'){
+                $irc->plugin_add(Eval => POE::Component::IRC::Plugin::Eval->new(
+                        Server_host => '127.0.0.1',
+                        Server_port => 14400,
+                        Channels    => ['#gshellz-bots'],
+                        ));
+                }
+                
         $irc->yield( register => 'all' );
         $irc->yield( connect  => {} );
         return;
@@ -228,9 +229,9 @@ sub irc_botcmd_karmatop {
 
 sub irc_botcmd_devtest{
         my $nick = ( split /!/, $_[ARG0] )[0];
-        my $target_channel = "#$_[ARG2]";        
+#        my $target_channel = "#$_[ARG2]";        
         if ($bosses{$nick}){
-                $irc->yield( notice => $nick => "config file: $myconfigfile your user\@host: $_[ARG0]  " );
+                $irc->yield( notice => $nick => "eval server?: $use_eval_server  " );
                 } else {
                         $irc->yield( privmsg => $nick => "Denied. You're not the boss of me!" );
                 }
