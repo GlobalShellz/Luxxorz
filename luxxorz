@@ -95,7 +95,7 @@ my $irc = POE::Component::IRC->spawn(
 ) or die "Oh noooo! $!";
 
 POE::Session->create(
-        package_states => [ main => [qw(_default 
+        package_states => [ main => [qw(_default  
                                         _start 
                                         irc_001 
                                         irc_public                                      		
@@ -107,8 +107,9 @@ POE::Session->create(
                                         irc_console_rw_fail
                                         irc_botcmd_join
                                         irc_botcmd_part
-                                        irc_botcmd_karmatop 
-                                        irc_botcmd_devtest                                                                               
+                                        irc_botcmd_karmatop
+                                        irc_botcmd_die
+                                        irc_botcmd_devtest
                                 )], ],
         heap           => { irc  => $irc },
 );
@@ -146,7 +147,8 @@ sub _start {
                         join   => 'syntax: $join channame (not #channame)',
                         part   => 'syntax: $part channame (not #channame)',
                         karmatop => 'returns Karma list',
-                        devtest => '',                        
+                        devtest => '', 
+                        die => '',                       
          }
         ));
          $irc->plugin_add( 'CTCP' , POE::Component::IRC::Plugin::CTCP->new(
@@ -155,14 +157,14 @@ sub _start {
 		clientinfo => $ctcpreply,
 		source => "For members of GlobalShellz..",
         ));
-        if ($use_eval_server eq '1'){
+        if ($use_eval_server){
                 $irc->plugin_add(Eval => POE::Component::IRC::Plugin::Eval->new(
                         Server_host => '127.0.0.1',
                         Server_port => 14400,
                         Channels    => ['#gshellz-bots'],
                         ));
                 }
-                
+             
         $irc->yield( register => 'all' );
         $irc->yield( connect  => {} );
         return;
@@ -227,14 +229,20 @@ sub irc_botcmd_karmatop {
         $irc->yield( notice => $nick => " #$lowest $sorted[-3] is now $karma{$sorted[-3]}" );
 }
 
-sub irc_botcmd_devtest{
+sub irc_botcmd_die {
         my $nick = ( split /!/, $_[ARG0] )[0];
-#        my $target_channel = "#$_[ARG2]";        
-        if ($bosses{$nick}){
-                $irc->yield( notice => $nick => "eval server?: $use_eval_server  " );
+#   owner only command.      
+        if ($bosses{$nick} eq 'owner'){
+                $irc->yield( notice => $nick => "disconnecting at your request" );
+                $irc->yield( shutdown => "goodbye.");
                 } else {
                         $irc->yield( privmsg => $nick => "Denied. You're not the boss of me!" );
                 }
+        
+}    
+        
+sub irc_botcmd_devtest{
+
         
 }
 #END BotCommand subs
