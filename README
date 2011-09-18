@@ -6,11 +6,13 @@
 #
 # Fuctions:
 #
-# substitute text
+# substitute text -all users
 #
-# karma
+# karma-all users
 #
-# join/part channels
+# join/part channels - owner,op
+#
+# die - owner
 #
 # Respond to CTCP PING, VERSION,
 #  USER INFO, CLIENTINFO, and SOURCE
