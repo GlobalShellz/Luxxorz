@@ -4,7 +4,7 @@
 # 
 ########################################
 #
-# Fuctions:
+# Functions:
 #
 # substitute text -all users
 #
@@ -22,7 +22,7 @@
 # Add Eval server code and bot eval code.
 # Eval Server code is to be run as root,
 # it chroots and runs code as nobody.
-# if you can'n run it as root, run it as
+# if you can't run it as root, run it as
 # your user but with unsafe => 1, added in
 # the eval server options block
 #
