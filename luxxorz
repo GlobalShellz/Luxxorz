@@ -30,7 +30,7 @@ use Config::General;
 use POE::Component::IRC::Plugin::Eval;
 
 
-my $VERSION = "0.7-dev";
+my $VERSION = "0.8-dev";
 
 
 # init config 
@@ -49,18 +49,6 @@ my $conf = new Config::General($myconfigfile);
 my %cfg = $conf->getall;
 
 
-# Get configuartion vales
-my $nickname = $cfg{irc}{nickname};
-my $ircname  = $cfg{irc}{ircname};
-
-my $server   = $cfg{irc}{server};
-my $password = $cfg{irc}{password};
-my $port = $cfg{irc}{port};
-my $ssl_status = $cfg{irc}{UseSSL};
-my $nspass = $cfg{irc}{nspass};
-
-my $bot_command_prefix = $cfg{botcommandprefix};
-
 my $ctcpreply= "Luxxorz bot v". $VERSION ." Developed by the Global Shellz Team www.globalshellz.org";
 
 my %channels;
@@ -68,15 +56,9 @@ for (@{$cfg{channels}}) {
 	$channels{$_} = '';
 }
 
-my $bindport = $cfg{console}{listen};
-my $bindpass = $cfg{console}{pass};
-
-my $use_eval_server = $cfg{use_eval};
-
 
 #other globals
 my %karma;
-
 
 # check for karma file. create it if necessary
 if (-e "karma"){
@@ -94,12 +76,12 @@ my %bosses = %{$cfg{owners}};
 
 # We create a new PoCo-IRC object
 my $irc = POE::Component::IRC->spawn(
-        nick    => $nickname,
-        ircname => $ircname,
-        server  => $server,
-        port => $port,
-        password => $password,
-        UseSSL => $ssl_status,
+        nick    => $cfg{irc}{nickname},
+        ircname => $cfg{irc}{ircname},
+        server  => $cfg{irc}{server},
+        port => $cfg{irc}{port},
+        password => $cfg{irc}{password},
+        UseSSL => $cfg{irc}{UseSSL},
 ) or die "Oh noooo! $!";
 
 POE::Session->create(
@@ -137,18 +119,18 @@ sub _start {
 
         $irc->plugin_add('AutoJoin', POE::Component::IRC::Plugin::AutoJoin->new( Channels => \%channels ));
         $irc->plugin_add( 'NickServID', POE::Component::IRC::Plugin::NickServID->new(
-                Password => $nspass,
+                Password => $cfg{irc}{nspass},
         ));
         $irc->plugin_add( 'Console' => POE::Component::IRC::Plugin::Console->new(
-                bindport => $bindport,
-                password => $bindpass,)
-        );
+                bindport => $cfg{console}{listen},
+                password => $cfg{console}{pass},
+	));
         $irc->plugin_add(
                 'SigFail' => POE::Component::IRC::Plugin::SigFail->new
         );
         $irc->plugin_add('BotCommand', POE::Component::IRC::Plugin::BotCommand->new(
                 Addressed => 0,
-                Prefix => $bot_command_prefix,
+                Prefix => $cfg{botcommandprefix},
                 Ignore_unknown => 1,
                 Method => 'privmsg',
                 Commands => {
@@ -161,11 +143,11 @@ sub _start {
         ));
          $irc->plugin_add( 'CTCP' , POE::Component::IRC::Plugin::CTCP->new(
                 version => $ctcpreply,
-                userinfo => $ircname,               
+                userinfo => $cfg{irc}{ircname},               
 		clientinfo => $ctcpreply,
 		source => "For members of GlobalShellz..",
         ));
-        if ($use_eval_server){
+        if ($cfg{use_eval}){
                 $irc->plugin_add(Eval => POE::Component::IRC::Plugin::Eval->new(
                         Server_host => '127.0.0.1',
                         Server_port => 14400,
@@ -199,9 +181,9 @@ sub irc_001 {
 #ARG2 is arguments passed (or undef)
 sub irc_botcmd_join {
         my $nick = ( split /!/, $_[ARG0] )[0];
-        my $target_channel = "#$_[ARG2]";
+        my $target_channel = "$_[ARG2]";
         #check to see if owner gave command, if not- complain
-        if ($bosses{$nick}){
+        if ($cfg{owners}{$nick}){
                 $irc->yield( notice => $nick => "Joining $target_channel at your request" );
                 $irc->yield( join => $target_channel);} else {
                         $irc->yield( notice => $nick => "Denied. You're not the boss of me!" );
@@ -211,8 +193,8 @@ sub irc_botcmd_join {
 sub irc_botcmd_part {
         
         my $nick = ( split /!/, $_[ARG0] )[0];
-        my $target_channel = "#$_[ARG2]";        
-        if ($bosses{$nick}){
+        my $target_channel = "$_[ARG2]";        
+        if ($cfg{owners}{$nick}){
                 $irc->yield( notice => $nick => "Parting $target_channel at your request" );
                 $irc->yield( part => $target_channel);
                 } else {
@@ -240,7 +222,7 @@ sub irc_botcmd_karmatop {
 sub irc_botcmd_die {
         my $nick = ( split /!/, $_[ARG0] )[0];
 #   owner only command.      
-        if ($bosses{$nick} eq 'owner'){
+        if ($cfg{owners}{$nick} eq 'owner'){
                 $irc->yield( notice => $nick => "disconnecting at your request" );
                 $irc->yield( shutdown => "goodbye.");
                 } else {
@@ -266,17 +248,20 @@ sub irc_public {
                 my $temp2 = $1;
                 if ( lc($nick) =~ /^$temp$/) {
                         $karma{$temp}--;
-                } else {
-                        $karma{$temp}++;
-                }
-                store \%karma, 'karma';
+                } elsif ( ! ( $temp =~ /^weed$/ )) {
+                	$karma{$temp}++;
+		}
+		store \%karma, 'karma';
                 $irc->yield( privmsg => $channel => "$nick: karma for $temp2 is now $karma{$temp}" );
         }
         if ( $what =~ /^(\w+)--(\s|$)/ ) {
                 my $temp = lc($1);
-                $karma{$temp}--;
+		my $temp2 = $1;
+		if ( ! ( $temp =~ /^weed$/ )) {
+	                $karma{$temp}--;
+		}
                 store \%karma, 'karma';
-                $irc->yield( privmsg => $channel => "$nick: karma for $1 is now $karma{$temp}" );
+                $irc->yield( privmsg => $channel => "$nick: karma for $temp2 is now $karma{$temp}" );
         }
         if ( $what =~ /^karma (\w+)$/ ) {
                 my $temp = lc($1);
@@ -381,5 +366,4 @@ sub _default {
         print join ' ', @output, "\n";
         return;
 }
-
 
