@@ -199,7 +199,7 @@ sub irc_001 {
 #ARG2 is arguments passed (or undef)
 sub irc_botcmd_join {
         my $nick = ( split /!/, $_[ARG0] )[0];
-        my $target_channel = "#$_[ARG2]";
+        my $target_channel = "$_[ARG2]";
         #check to see if owner gave command, if not- complain
         if ($bosses{$nick}){
                 $irc->yield( notice => $nick => "Joining $target_channel at your request" );
@@ -211,7 +211,7 @@ sub irc_botcmd_join {
 sub irc_botcmd_part {
         
         my $nick = ( split /!/, $_[ARG0] )[0];
-        my $target_channel = "#$_[ARG2]";        
+        my $target_channel = $_[ARG2];        
         if ($bosses{$nick}){
                 $irc->yield( notice => $nick => "Parting $target_channel at your request" );
                 $irc->yield( part => $target_channel);
