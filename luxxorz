@@ -42,9 +42,9 @@ $myconfigfile= shift || 'luxxorz.conf';
 unless (-e $myconfigfile){
         die "please specify a vaild configuration file or restore luxxorz.conf";
 }
+
+
 # now create config object
-#my $cfg;      
-#$cfg = new Config::Simple($myconfigfile);
 my $conf = new Config::General($myconfigfile);
 my %cfg = $conf->getall;
 
@@ -57,26 +57,27 @@ my $server   = $cfg{irc}{server};
 my $password = $cfg{irc}{password};
 my $port = $cfg{irc}{port};
 my $ssl_status = $cfg{irc}{UseSSL};
+my $nspass = $cfg{irc}{nspass};
 
 my $bot_command_prefix = $cfg{botcommandprefix};
 
 my $ctcpreply= "Luxxorz bot v". $VERSION ." Developed by the Global Shellz Team www.globalshellz.org";
 
-#my $chanref = $cfg->get_block('Channels');
-#my %channels = %{$chanref};
-#my @channels = @{$cfg{channels}};
 my %channels;
 for (@{$cfg{channels}}) {
 	$channels{$_} = '';
 }
 
-my $bindport = $cfg{listen};
+my $bindport = $cfg{console}{listen};
+my $bindpass = $cfg{console}{pass};
 
 my $use_eval_server = $cfg{use_eval};
 
 
 #other globals
 my %karma;
+
+
 # check for karma file. create it if necessary
 if (-e "karma"){
                 %karma = %{retrieve('karma')};
@@ -136,11 +137,11 @@ sub _start {
 
         $irc->plugin_add('AutoJoin', POE::Component::IRC::Plugin::AutoJoin->new( Channels => \%channels ));
         $irc->plugin_add( 'NickServID', POE::Component::IRC::Plugin::NickServID->new(
-                Password => 'nickservpass'
+                Password => $nspass,
         ));
         $irc->plugin_add( 'Console' => POE::Component::IRC::Plugin::Console->new(
                 bindport => $bindport,
-                password => 'consolepass',)
+                password => $bindpass,)
         );
         $irc->plugin_add(
                 'SigFail' => POE::Component::IRC::Plugin::SigFail->new
@@ -380,4 +381,5 @@ sub _default {
         print join ' ', @output, "\n";
         return;
 }
+
 
