@@ -26,11 +26,11 @@ use HTML::Entities;
 use POE::Component::IRC::Plugin::BotCommand;
 use POE::Component::IRC::Plugin::CTCP;
 use POE::Component::SSLify;
-use Config::Simple;
+use Config::General;
 use POE::Component::IRC::Plugin::Eval;
 
 
-my $VERSION = "0.6-dev";
+my $VERSION = "0.7-dev";
 
 
 # init config 
@@ -38,33 +38,42 @@ my $VERSION = "0.6-dev";
 # then check to see if file exists.
 
 my $myconfigfile;
-$myconfigfile= shift || 'default.cfg';
+$myconfigfile= shift || 'luxxorz.conf';
 unless (-e $myconfigfile){
-        die "please specify a valid configuration file or restore default.cfg";
+        die "please specify a vaild configuration file or restore luxxorz.conf";
 }
-
 # now create config object
-my $cfg;      
-$cfg = new Config::Simple($myconfigfile);
+#my $cfg;      
+#$cfg = new Config::Simple($myconfigfile);
+my $conf = new Config::General($myconfigfile);
+my %cfg = $conf->getall;
 
-# Get configuration vales from $cfg
-my $nickname = $cfg->param("Server.nickname");
-my $ircname  = $cfg->param("Server.ircname");
 
-my $server   = $cfg->param("Server.server");
-my $password = $cfg->param("Server.password");
-my $port = $cfg->param("Server.port");
-my $ssl_status = $cfg->param("Server.UseSSL");
+# Get configuartion vales
+my $nickname = $cfg{irc}{nickname};
+my $ircname  = $cfg{irc}{ircname};
 
-my $bot_command_prefix = $cfg->param("Bot.botcommandprefix");
+my $server   = $cfg{irc}{server};
+my $password = $cfg{irc}{password};
+my $port = $cfg{irc}{port};
+my $ssl_status = $cfg{irc}{UseSSL};
+
+my $bot_command_prefix = $cfg{botcommandprefix};
 
 my $ctcpreply= "Luxxorz bot v". $VERSION ." Developed by the Global Shellz Team www.globalshellz.org";
 
-my $chanref = $cfg->get_block('Channels');
-my %channels = %{$chanref};
+#my $chanref = $cfg->get_block('Channels');
+#my %channels = %{$chanref};
+#my @channels = @{$cfg{channels}};
+my %channels;
+for (@{$cfg{channels}}) {
+	$channels{$_} = '';
+}
 
-my $bindport = $cfg->param("Bot.listen");
-my $use_eval_server =  $cfg->param("Bot.evalserver");
+my $bindport = $cfg{listen};
+
+my $use_eval_server = $cfg{use_eval};
+
 
 #other globals
 my %karma;
@@ -79,9 +88,7 @@ if (-e "karma"){
 my %lastline;
 
 #global owner (temp until a better auth method is implemented)
-my $bossref = $cfg->get_block('Owners');
-my %bosses = %{$bossref};
-
+my %bosses = %{$cfg{owners}};
 
 
 # We create a new PoCo-IRC object
