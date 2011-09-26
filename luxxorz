@@ -283,6 +283,7 @@ sub irc_public {
                 (my $temp2 = $2) =~ s/\/$//;
                 $lastline{$channel} =~ s/$temp1/$temp2/g;
                 $irc->yield( privmsg => $channel => "$lastline{$channel}");
+		$what = $lastline{$channel};
         }
         if ( $what =~ /^luxxorz(\s|$)/ ) {
                         $what =~ s/^luxxorz(\s)?//;
