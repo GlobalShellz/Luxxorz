@@ -100,7 +100,7 @@ POE::Session->create(
                                         irc_botcmd_part
                                         irc_botcmd_karmatop
                                         irc_botcmd_tinyurl
-                                        irc_botcmd_urltitle
+                                        irc_botcmd_title
                                         irc_botcmd_die
                                         irc_botcmd_devtest
                                 )], ],
@@ -141,7 +141,7 @@ sub _start {
                         part   => 'syntax: $part channame (not #channame)',
                         karmatop => 'returns Karma list',
                         tinyurl => 'syntax: tinyurl http://www.url.here - shortens an URL using http://www.tinyurl.com',
-                        urltitle => 'syntax: urltitle http://www.url.here - displays URL title',
+                        title => 'syntax: urltitle http://www.url.here - displays URL title',
                         devtest => '', 
                         die => '',                       
          }
@@ -241,23 +241,6 @@ sub irc_botcmd_devtest{
         
 }
 
-sub tinyurl {
-	my $input = shift;
-	my $reply;
-	if ($input =~ m/\ /) {
-		$reply = "error: a space in the URL";
-	} elsif ($input =~ m/^http(s)?\:\/\//){
-		if (length($input) < 22){
-			 $reply = $input;
-		} else {
-			$reply = makeashorterlink($input);
-		}
-	} else {
-		$reply = "sorry, this is not an http[s] URL";
-	}
-	return $reply;
-}
-
 sub irc_botcmd_tinyurl {
 	# get the message, event information
 	my $nick = ( split /!/, $_[ARG0] )[0];
@@ -272,7 +255,7 @@ sub irc_botcmd_tinyurl {
 	$irc->yield( privmsg => $chan => "$nick: $reply");
 }
 
-sub irc_botcmd_urltitle {
+sub irc_botcmd_title {
 	# get the message, event information
 	my $nick = ( split /!/, $_[ARG0] )[0];
 	my $chan = $_[ARG1];
@@ -384,6 +367,24 @@ sub irc_bot_addressed {
 	$reply = decode_entities($reply);
 	$irc->yield( privmsg => $channel => "$nick: $reply");
 }
+
+sub tinyurl {
+	my $input = shift;
+	my $reply;
+	if ($input =~ m/\ /) {
+		$reply = "error: a space in the URL";
+	} elsif ($input =~ m/^http(s)?\:\/\//){
+		if (length($input) < 22){
+			$reply = $input;
+		} else {
+			$reply = makeashorterlink($input);
+		}
+	} else {
+		$reply = "sorry, this is not an http[s] URL";
+	}
+	return $reply;
+}
+
 
 sub irc_console_service {
 	my $getsockname = $_[ARG0];
