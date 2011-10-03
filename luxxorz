@@ -61,12 +61,12 @@ for (@{$cfg{channels}}) {
 my %karma;
 
 # check for karma file. create it if necessary
-if (-e "karma"){
-                %karma = %{retrieve('karma')};
+if (-e $cfg{karmafile}){
+                %karma = %{retrieve($cfg{karmafile})};
                 } else {
                         my $temp = 'gshellz';       
                         $karma{$temp}++;
-                        store \%karma, 'karma';                           
+                        store \%karma, $cfg{karmafile};                           
 }
 my %lastline;
 
@@ -285,7 +285,7 @@ sub irc_public {
                 } elsif ( ! ( $temp =~ /^weed$/ )) {
                 	$karma{$temp}++;
 		}
-		store \%karma, 'karma';
+		store \%karma, $cfg{karmafile};
                 $irc->yield( privmsg => $channel => "$nick: karma for $temp2 is now $karma{$temp}" );
         }
         if ( $what =~ /^(\w+)--(\s|$)/ ) {
@@ -294,7 +294,7 @@ sub irc_public {
 		if ( ! ( $temp =~ /^weed$/ )) {
 	                $karma{$temp}--;
 		}
-                store \%karma, 'karma';
+                store \%karma, $cfg{karmafile};
                 $irc->yield( privmsg => $channel => "$nick: karma for $temp2 is now $karma{$temp}" );
         }
         if ( $what =~ /^karma (\w+)$/ ) {

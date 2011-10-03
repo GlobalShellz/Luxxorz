@@ -52,3 +52,9 @@ use_eval 1
 #
 
 botcommandprefix +\$
+
+#
+# Karma filename
+#
+
+karmafile   karma
