@@ -28,9 +28,9 @@ use POE::Component::IRC::Plugin::CTCP;
 use POE::Component::SSLify;
 use Config::General;
 use POE::Component::IRC::Plugin::Eval;
-
-
-my $VERSION = "0.8-dev";
+use WWW::Shorten::TinyURL;
+use URI::Title qw( title );
+my $VERSION = "0.9-dev";
 
 
 # init config 
@@ -99,6 +99,8 @@ POE::Session->create(
                                         irc_botcmd_join
                                         irc_botcmd_part
                                         irc_botcmd_karmatop
+                                        irc_botcmd_tinyurl
+                                        irc_botcmd_urltitle
                                         irc_botcmd_die
                                         irc_botcmd_devtest
                                 )], ],
@@ -138,6 +140,8 @@ sub _start {
                         join   => 'syntax: $join channame (not #channame)',
                         part   => 'syntax: $part channame (not #channame)',
                         karmatop => 'returns Karma list',
+                        tinyurl => 'syntax: tinyurl http://www.url.here - shortens an URL using http://www.tinyurl.com',
+                        urltitle => 'syntax: urltitle http://www.url.here - displays URL title',
                         devtest => '', 
                         die => '',                       
          }
@@ -236,6 +240,48 @@ sub irc_botcmd_devtest{
 
         
 }
+
+sub irc_botcmd_tinyurl {
+    # get the message, event information
+    my $nick = ( split /!/, $_[ARG0] )[0];
+    my $chan = $_[ARG1];
+    # tiny the URL
+    my $input = $_[ARG2];
+    my $reply;
+    if ($input =~ m/\ /) {
+        $reply = "error: a space in the URL"
+    } elsif ($input =~ m/^http(s)?\:\/\//){
+        if (length($input) < length("http://tinyurl.com/aaa")){
+            $reply = "hey, your URL is tiny already o:"
+        } else {
+            $reply = makeashorterlink("$_[ARG2]");
+        }
+    } else {
+        $reply = "sorry, this is not an http[s] URL";
+    }
+    # reply
+    $irc->yield( privmsg => $chan => "$nick: $reply");
+}
+
+sub irc_botcmd_urltitle {
+    # get the message, event information
+    my $nick = ( split /!/, $_[ARG0] )[0];
+    my $chan = $_[ARG1];
+    # title the URL
+    my $input = $_[ARG2];
+    my $reply;
+    if ($input =~ m/\ /) {
+        $reply = "error: a space in the URL"
+    } elsif ($input =~ m/^http(s)?\:\/\//){
+        $reply = title("$_[ARG2]").' - '.$input;
+    } else {
+        $reply = "error: not an http[s] URL";
+    }
+    # reply
+    $irc->yield( privmsg => $chan => "$nick: $reply");
+}
+
+
 #END BotCommand subs
 
 sub irc_public {

@@ -1,0 +1,54 @@
+#####################
+#
+# Luxxorz Bot Config
+#
+#####################
+#
+# IRC Options
+#
+
+<irc>
+    ircname karmabot
+    nickname luxxorz
+    server 127.0.0.1
+    UseSSL 0
+    port 33333
+    password proxypass
+    nspass nspass
+</irc>
+
+#
+# Owners
+#
+
+<owners>
+    brabo owner
+    Old_Soldier op
+</owners>
+
+#
+# Channel List
+#
+
+channels \#gshellz-bots
+channels \#gshellz-mud
+
+#
+# Listen Port and password
+#
+<console>
+    listen 6969
+    pass consolepass
+</console>
+
+#
+# Use eval?
+#
+
+use_eval 1
+
+#
+# The BotCommand prefix, the \ is needed to store it atm
+#
+
+botcommandprefix +\$
