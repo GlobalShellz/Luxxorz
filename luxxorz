@@ -210,18 +210,22 @@ sub irc_botcmd_part {
 sub irc_botcmd_karmatop {
         my $nick = ( split /!/, $_[ARG0] )[0];
         my @sorted = sort { $karma{$b} <=> $karma{$a} } keys %karma;
-        $irc->yield( notice => $nick => " The Highest Scores: " );
-        $irc->yield( notice => $nick => " #1 $sorted[0] is now $karma{$sorted[0]}" );
-        $irc->yield( notice => $nick => " #2 $sorted[1] is now $karma{$sorted[1]}" );
-        $irc->yield( notice => $nick => " #3 $sorted[2] is now $karma{$sorted[2]}" );
-        $irc->yield( notice => $nick => " " );
-        $irc->yield( notice => $nick => " The Lowest Scores: " );
-        my $lowest = $#sorted + 1;
-        $irc->yield( notice => $nick => " #$lowest $sorted[-1] is now $karma{$sorted[-1]}" );
-        $lowest--;
-        $irc->yield( notice => $nick => " #$lowest $sorted[-2] is now $karma{$sorted[-2]}" );
-        $lowest--;
-        $irc->yield( notice => $nick => " #$lowest $sorted[-3] is now $karma{$sorted[-3]}" );
+        if(($#sorted+1) > 2){
+        	$irc->yield( notice => $nick => " The Highest Scores: " );
+        	$irc->yield( notice => $nick => " #1 $sorted[0] is now $karma{$sorted[0]}" );
+        	$irc->yield( notice => $nick => " #2 $sorted[1] is now $karma{$sorted[1]}" );
+        	$irc->yield( notice => $nick => " #3 $sorted[2] is now $karma{$sorted[2]}" );
+        	$irc->yield( notice => $nick => " " );
+        	$irc->yield( notice => $nick => " The Lowest Scores: " );
+        	my $lowest = $#sorted + 1;
+        	$irc->yield( notice => $nick => " #$lowest $sorted[-1] is now $karma{$sorted[-1]}" );
+        	$lowest--;
+        	$irc->yield( notice => $nick => " #$lowest $sorted[-2] is now $karma{$sorted[-2]}" );
+        	$lowest--;
+        	$irc->yield( notice => $nick => " #$lowest $sorted[-3] is now $karma{$sorted[-3]}" );
+        } else {
+        	$irc->yield( notice => $nick => "Not enough records yet." );
+        }
 }
 
 sub irc_botcmd_die {
