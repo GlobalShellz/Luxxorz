@@ -241,44 +241,48 @@ sub irc_botcmd_devtest{
         
 }
 
+sub tinyurl {
+	my $input = shift;
+	my $reply;
+	if ($input =~ m/\ /) {
+		$reply = "error: a space in the URL";
+	} elsif ($input =~ m/^http(s)?\:\/\//){
+		if (length($input) < 22){
+			 $reply = $input;
+		} else {
+			$reply = makeashorterlink($input);
+		}
+	} else {
+		$reply = "sorry, this is not an http[s] URL";
+	}
+	return $reply;
+}
+
 sub irc_botcmd_tinyurl {
-    # get the message, event information
-    my $nick = ( split /!/, $_[ARG0] )[0];
-    my $chan = $_[ARG1];
-    # tiny the URL
-    my $input = $_[ARG2];
-    my $reply;
-    if ($input =~ m/\ /) {
-        $reply = "error: a space in the URL";
-    } elsif ($input =~ m/^http(s)?\:\/\//){
-        if (length($input) < 22){
-            $reply = "hey, your URL is tiny already o:";
-        } else {
-            $reply = makeashorterlink("$_[ARG2]");
-        }
-    } else {
-        $reply = "sorry, this is not an http[s] URL";
-    }
-    # reply
-    $irc->yield( privmsg => $chan => "$nick: $reply");
+	# get the message, event information
+	my $nick = ( split /!/, $_[ARG0] )[0];
+	my $chan = $_[ARG1];
+	# tiny the URL
+	my $input = $_[ARG2];
+	my $reply = tinyurl($input);
+	if ( $reply eq $input ) {
+		$reply = "hey, your URL is tiny already o:";
+	}
+	# reply
+	$irc->yield( privmsg => $chan => "$nick: $reply");
 }
 
 sub irc_botcmd_urltitle {
-    # get the message, event information
-    my $nick = ( split /!/, $_[ARG0] )[0];
-    my $chan = $_[ARG1];
-    # title the URL
-    my $input = $_[ARG2];
-    my $reply;
-    if ($input =~ m/\ /) {
-        $reply = "error: a space in the URL";
-    } elsif ($input =~ m/^http(s)?\:\/\//){
-        $reply = title("$_[ARG2]").' - '.$input;
-    } else {
-        $reply = "error: not an http[s] URL";
-    }
-    # reply
-    $irc->yield( privmsg => $chan => "$nick: $reply");
+	# get the message, event information
+	my $nick = ( split /!/, $_[ARG0] )[0];
+	my $chan = $_[ARG1];
+	# title the URL
+	my $input = $_[ARG2];
+	my $tiny = tinyurl($input);
+	my $reply;
+	$reply = title($input) . ' - ' . $tiny;
+	# reply
+	$irc->yield( privmsg => $chan => "$nick: $reply");
 }
 
 
