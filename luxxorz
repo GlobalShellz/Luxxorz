@@ -251,7 +251,7 @@ sub irc_botcmd_tinyurl {
     if ($input =~ m/\ /) {
         $reply = "error: a space in the URL";
     } elsif ($input =~ m/^http(s)?\:\/\//){
-        if (length($input) < length("http://tinyurl.com/aaa")){
+        if (length($input) < 22){
             $reply = "hey, your URL is tiny already o:";
         } else {
             $reply = makeashorterlink("$_[ARG2]");
