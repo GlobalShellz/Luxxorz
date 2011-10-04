@@ -60,6 +60,10 @@ for (@{$cfg{channels}}) {
 #other globals
 my %karma;
 
+#check for karmafile in conf file and exit if missing
+unless ( $cfg{karmafile} ){
+        die "The config file is missing a karmafile entry. Exiting";
+}
 # check for karma file. create it if necessary
 if (-e $cfg{karmafile}){
                 %karma = %{retrieve($cfg{karmafile})};
