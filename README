@@ -6,9 +6,13 @@
 #
 # Functions:
 #
-# substitute text -all users
+# substitute text - all users
 #
-# karma-all users
+# tinyurl and title - all users
+#
+# ddg duckduckgo search - all users
+#
+# karma and karmatop - all users
 #
 # join/part channels - owner,op
 #
