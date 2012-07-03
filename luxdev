@@ -1,0 +1,888 @@
+#!/usr/bin/perl
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+use local::lib;
+use Modern::Perl;
+use POE qw(Component::IRC);
+use Storable;
+use base qw(DBIx::Class::Schema::Loader);
+use DBIx::Class::Schema;
+use lib "/home/luxxorz/perl/lib";
+use Luxxorz::Schema;
+use POE qw(Component::IRC::State Component::IRC::Plugin::AutoJoin Component::IRC::Plugin::Console Component::IRC::Plugin::SigFail);
+use POE::Component::IRC::Plugin::NickServID;
+use WWW::DuckDuckGo;
+use HTML::Entities;
+use POE::Component::IRC::Plugin::BotCommand;
+use POE::Component::IRC::Plugin::CTCP;
+use POE::Component::SSLify;
+use Config::General;
+use POE::Component::IRC::Plugin::Eval;
+use WWW::Shorten::TinyURL;
+use URI::Title qw( title );
+my $VERSION = "1.0-dev";
+
+# initialise db
+
+my $schema = Luxxorz::Schema->connect('dbi:SQLite:dbname=/home/luxxorz/perl/luxdb.db','', '',{ sqlite_unicode => 1});
+
+# init config 
+# take file name from command line, if non given use default.cfg
+# then check to see if file exists.
+
+my $myconfigfile;
+$myconfigfile= shift || 'luxxorz.conf';
+unless (-e $myconfigfile){
+        die "please specify a valid configuration file or restore luxxorz.conf";
+}
+
+
+# now create config object
+my $conf = new Config::General($myconfigfile);
+my %cfg = $conf->getall;
+
+
+my $ctcpreply= "Luxxorz bot v". $VERSION ." Developed by the Global Shellz Team www.globalshellz.org";
+
+my %channels;
+for (@{$cfg{channels}}) {
+	$channels{$_} = '';
+}
+
+
+#other globals
+my %karma;
+
+#check for karmafile in conf file and exit if missing
+unless ( $cfg{karmafile} ){
+        die "The config file is missing a karmafile entry. Exiting";
+}
+# check for karma file. create it if necessary
+if (-e $cfg{karmafile}){
+                %karma = %{retrieve($cfg{karmafile})};
+                } else {
+                        my $temp = 'gshellz';       
+                        $karma{$temp}++;
+                        store \%karma, $cfg{karmafile};                           
+}
+my %lastline;
+
+#global owner (temp until a better auth method is implemented)
+my %bosses = %{$cfg{owners}};
+
+
+# We create a new PoCo-IRC object
+my $irc = POE::Component::IRC::State->spawn(
+        nick    => $cfg{irc}{nickname},
+        ircname => $cfg{irc}{ircname},
+        server  => $cfg{irc}{server},
+        port => $cfg{irc}{port},
+        password => $cfg{irc}{password},
+        UseSSL => $cfg{irc}{UseSSL},
+) or die "Oh noooo! $!";
+
+POE::Session->create(
+        package_states => [ main => [qw(_default  
+                                        _start 
+                                        irc_001 
+                                        irc_public                                      		
+					irc_ctcp_action
+                                        irc_join
+					irc_whois
+                                        irc_console_service
+                                        irc_console_connect
+                                        irc_console_authed
+                                        irc_console_close 
+                                        irc_console_rw_fail
+                                        irc_botcmd_join
+                                        irc_botcmd_part
+                                        irc_botcmd_karmatop
+                                        irc_botcmd_tinyurl
+                                        irc_botcmd_title
+                                        irc_botcmd_die
+                                        irc_botcmd_devtest
+					irc_botcmd_adduser
+					irc_botcmd_ban
+					irc_botcmd_unban
+					irc_botcmd_banlist
+					irc_botcmd_enforce
+					irc_botcmd_deforce
+                                )], ],
+        heap           => { irc  => $irc },
+);
+
+$poe_kernel->run();
+
+sub irc_join {
+	my $nick = lc(( split /!/, $_[ARG0] )[0]);
+        my $chan = $_[ARG1];
+
+	unless ( $nick eq "luxxorz" ) {	
+		
+#		$irc->yield('whois' => $nick);
+		#$irc->yield('privmsg' => "#gshellz-bots" => "$test->{identified}");
+		my $who = $schema->resultset('Who')->create({
+			who => $nick,
+			reason => 2,
+			channel => $chan,
+		});
+		$irc->yield( whois => $nick );
+	}
+        #$irc->yield(privmsg => $chan => "hi $channel!");
+}
+
+sub _start {
+        my $heap = $_[HEAP];
+
+        # retrieve our component's object from the heap where we stashed it
+        my $irc = $heap->{irc};
+
+        $irc->plugin_add('AutoJoin', POE::Component::IRC::Plugin::AutoJoin->new( Channels => \%channels ));
+        $irc->plugin_add( 'NickServID', POE::Component::IRC::Plugin::NickServID->new(
+                Password => $cfg{irc}{nspass},
+        ));
+        $irc->plugin_add( 'Console' => POE::Component::IRC::Plugin::Console->new(
+                bindport => $cfg{console}{listen},
+                password => $cfg{console}{pass},
+	));
+        $irc->plugin_add(
+                'SigFail' => POE::Component::IRC::Plugin::SigFail->new
+        );
+        $irc->plugin_add('BotCommand', POE::Component::IRC::Plugin::BotCommand->new(
+                Addressed => 0,
+                Prefix => $cfg{botcommandprefix},
+                Ignore_unknown => 1,
+                Method => 'privmsg',
+                Commands => {
+                        join   => 'syntax: $join channame (not #channame)',
+                        part   => 'syntax: $part channame (not #channame)',
+                        karmatop => 'returns Karma list',
+                        tinyurl => 'syntax: tinyurl http://www.url.here - shortens an URL using http://www.tinyurl.com',
+                        title => 'syntax: urltitle http://www.url.here - displays URL title',
+                        devtest => '', 
+                        die => '',
+			ban => 'syntax: $ban nickname reason',
+			unban => 'syntax: $unban nickname',
+			banlist => 'syntax: $banlist',
+			adduser => 'syntax: $adduser nickname level',
+			enforce => 'syntax: $enforce',
+			deforce => 'syntax: $deforce',
+         }
+        ));
+         $irc->plugin_add( 'CTCP' , POE::Component::IRC::Plugin::CTCP->new(
+                version => $ctcpreply,
+                userinfo => $cfg{irc}{ircname},               
+		clientinfo => $ctcpreply,
+		source => "For members of GlobalShellz..",
+        ));
+        if ($cfg{use_eval}){
+                $irc->plugin_add(Eval => POE::Component::IRC::Plugin::Eval->new(
+                        Server_host => '127.0.0.1',
+                        Server_port => 14400,
+                        Channels    => ['#gshellz-bots'],
+                        ));
+                }
+             
+        $irc->yield( register => 'all' );
+        $irc->yield( connect  => {} );
+        return;
+}
+
+sub irc_001 {
+        my $sender = $_[SENDER];
+
+        # Since this is an irc_* event, we can get the component's object by
+        # accessing the heap of the sender. Then we register and connect to the
+        # specified server.
+        my $irc = $sender->get_heap();
+
+        print "Connected to ", $irc->server_name(), "\n";
+
+        # we join our channels
+        return;
+}
+
+# START BotCommand subs
+#  irc_botcmd_* arguments
+#ARG0 = nick!hostmask of the user who issued the command 
+#ARG1 is the name of the channel in which the command was issued
+#ARG2 is arguments passed (or undef)
+sub irc_botcmd_join {
+        my $nick = ( split /!/, $_[ARG0] )[0];
+        my $target_channel = "$_[ARG2]";
+        #check to see if owner gave command, if not- complain
+        if ($cfg{owners}{$nick}){
+                $irc->yield( notice => $nick => "Joining $target_channel at your request" );
+                $irc->yield( join => $target_channel);} else {
+                        $irc->yield( notice => $nick => "Denied. You're not the boss of me!" );
+                }
+}
+
+sub irc_botcmd_part {
+        
+        my $nick = ( split /!/, $_[ARG0] )[0];
+        my $target_channel = "$_[ARG2]";        
+        if ($cfg{owners}{$nick}){
+                $irc->yield( notice => $nick => "Parting $target_channel at your request" );
+                $irc->yield( part => $target_channel);
+                } else {
+                        $irc->yield( privmsg => $nick => "Denied. You're not the boss of me!" );
+                }
+}
+
+# add users
+# $add nickname level
+
+sub irc_botcmd_adduser {
+	my $nick = lc(( split /!/, $_[ARG0] )[0]);
+	my $channel = $_[ARG1];
+	my $user = lc(( split / /, $_[ARG2])[0]);
+	my $level = ( split / /, $_[ARG2])[1];
+	# start auth check
+	my $auth = $schema->resultset('Op')->find({ opkey => 1 });
+	unless ($auth) {
+		if ($cfg{owners}{$nick}){
+			my $new = $schema->resultset('Op')->create({
+				nick => $user,
+				channel => $channel,
+				level => $level,
+			});
+			my $who = $schema->resultset('Who')->create({
+				who => $user,
+				reason => 1,
+			});
+			$irc->yield ( whois => $user );
+		}
+	} else {
+		if ( $auth->nick eq $nick) {
+			my $authns = $auth->nsaccount;
+			my $auser = $auth->nick;
+			my $who = $schema->resultset('Who')->create({
+				who => $auser,
+				ns => $authns,
+				reason => 3,
+				channel => $channel,
+				user => $user,
+				level => $level,
+			});
+			$irc->yield ( whois => $auser );
+		}
+	}
+}
+# ban/unban commands
+
+sub irc_botcmd_ban {
+        my $nick = lc(( split /!/, $_[ARG0] )[0]);
+	my $channel = $_[ARG1];
+        my $target = lc(( split / /, $_[ARG2])[0]);
+	my $reason = $_[ARG2];
+	$reason =~ s/$target //;
+#        if ($cfg{owners}{$nick}){
+	my $who = $schema->resultset('Who')->create({
+		who => $nick,
+		reason => 4,
+		channel => $channel,
+		user => $target,
+		breason => $reason,
+	});
+	$irc->yield( whois => $nick );
+}
+#		$irc->yield ( whois => $target );
+
+#                $irc->yield( notice => $nick => "Banning $target at your request" );
+#		$irc->yield( privmsg => $channel => "Banning $target as \$a:". $target ." with reason: ". $reason ."  :)");
+#		$irc->yield( mode => $channel => "+b \$a:". $target );
+#		my $whois = $irc->nick_info($target);
+
+#		my $newban = $schema->resultset('Ban')->create({
+#			nick => $target,
+#			banner => $nick,
+#			ban => "\$a:". $target,
+#			channel => $channel,
+#			reason => $reason,
+#		});
+#		for ( keys %{ $irc->whois($target) }) {
+#			$irc->yield( privmsg => $channel => "Banning $target as \$a:  ". $_ ."  with reason: ". $reason ."  :)");
+#		}
+#		my $who = $schema->resultset('Who')->create({
+#			who => $target,
+#			reason => 2,
+#		});
+#		$irc->yield ( whois => $target );
+#		my @whois = $irc->($target);
+			
+                #$irc->yield( part => $target_channel);
+#                } else {
+#                        $irc->yield( privmsg => $nick => "Denied. You're not the boss of me!" );
+#                }
+#}
+
+sub irc_botcmd_unban {
+	my $nick = lc(( split /!/, $_[ARG0] )[0]);
+	my $channel = $_[ARG1];
+	my $ubnick = lc($_[ARG2]);
+	my $who = $schema->resultset('Who')->create({
+		who => $nick,
+		reason => 5,
+		channel => $channel,
+		user => $ubnick,
+	});
+	$irc->yield( whois => $nick );
+}
+#
+#	if ($cfg{owners}{$nick}){
+#		my $unban = $schema->resultset('Ban')->find({ nick => $ubnick });
+#		if ($unban) {
+#			my $ubchan = $unban->channel;
+#			my $ban = $unban->ban;
+#			if ( $channel eq $ubchan ) {
+#				$irc->yield( mode => $channel => "-b $ban" );
+#				$unban->delete;
+#			}
+#		}
+#	}
+#}
+
+sub irc_botcmd_banlist {
+	my $nick = ( split /!/, $_[ARG0] )[0];
+	my $channel = $_[ARG1];
+	my $who = $schema->resultset('Who')->create({
+		who => $nick,
+		reason => 6,
+		channel => $channel,
+	});
+	$irc->yield( whois => $nick );
+
+#	if ($cfg{owners}{$nick}){
+#		my @bans = $schema->resultset('Ban')->search({ channel => $channel });
+#		if ($bans[0]) {
+#			for (@bans) {
+#				my $bnick = $_->nick;
+#				my $ban = $_->ban;
+#				my $reason = $_->reason;
+#				$irc->yield( privmsg => $nick => "$bnick $ban $reason" );
+#			}
+#		}
+#		for my $ban ( keys %{ $irc->channel_ban_list($channel) }) {
+#			$irc->yield( privmsg => $nick => "$ban" );
+#		}
+#	}
+}
+
+# grab ban list and store
+
+sub irc_botcmd_enforce {
+	my $nick = ( split /!/, $_[ARG0] )[0];
+	my $channel = $_[ARG1];
+	my $who = $schema->resultset('Who')->create({
+		who => $nick,
+		reason => 7,
+		channel => $channel,
+	});
+	$irc->yield( whois => $nick );
+
+
+#	for my $ban ( keys %{ $irc->channel_ban_list($channel) }) {
+#		$irc->yield( privmsg => $nick => "$ban" );
+#	}
+}
+
+sub irc_botcmd_deforce {
+	my $nick = ( split /!/, $_[ARG0] )[0];
+	my $channel = $_[ARG1];
+	my $who = $schema->resultset('Who')->create({
+		who => $nick,
+		reason => 8,
+		channel => $channel,
+	});
+	$irc->yield( whois => $nick );
+}
+
+
+sub irc_botcmd_karmatop {
+        my $nick = ( split /!/, $_[ARG0] )[0];
+        my @sorted = sort { $karma{$b} <=> $karma{$a} } keys %karma;
+        if(($#sorted+1) > 2){
+        	$irc->yield( notice => $nick => " The Highest Scores: " );
+        	$irc->yield( notice => $nick => " #1 $sorted[0] is now $karma{$sorted[0]}" );
+        	$irc->yield( notice => $nick => " #2 $sorted[1] is now $karma{$sorted[1]}" );
+        	$irc->yield( notice => $nick => " #3 $sorted[2] is now $karma{$sorted[2]}" );
+        	$irc->yield( notice => $nick => " " );
+        	$irc->yield( notice => $nick => " The Lowest Scores: " );
+        	my $lowest = $#sorted + 1;
+        	$irc->yield( notice => $nick => " #$lowest $sorted[-1] is now $karma{$sorted[-1]}" );
+        	$lowest--;
+        	$irc->yield( notice => $nick => " #$lowest $sorted[-2] is now $karma{$sorted[-2]}" );
+        	$lowest--;
+        	$irc->yield( notice => $nick => " #$lowest $sorted[-3] is now $karma{$sorted[-3]}" );
+        } else {
+        	$irc->yield( notice => $nick => "Not enough records yet." );
+        }
+}
+
+sub irc_botcmd_die {
+        my $nick = ( split /!/, $_[ARG0] )[0];
+#   owner only command.      
+        if ($cfg{owners}{$nick} eq 'owner'){
+                $irc->yield( notice => $nick => "disconnecting at your request" );
+                $irc->yield( shutdown => "goodbye.");
+                } else {
+                        $irc->yield( privmsg => $nick => "Denied. You're not the boss of me!" );
+                }
+        
+}    
+        
+sub irc_botcmd_devtest{
+
+        
+}
+
+sub irc_botcmd_tinyurl {
+	# get the message, event information
+	my $nick = ( split /!/, $_[ARG0] )[0];
+	my $chan = $_[ARG1];
+	# tiny the URL
+	my $input = $_[ARG2];
+	my $reply = tinyurl($input);
+	if ( $reply eq $input ) {
+		$reply = "hey, your URL is tiny already o:";
+	}
+	# reply
+	$irc->yield( privmsg => $chan => "$nick: $reply");
+}
+
+sub irc_botcmd_title {
+	# get the message, event information
+	my $nick = ( split /!/, $_[ARG0] )[0];
+	my $chan = $_[ARG1];
+	# title the URL
+	my $input = $_[ARG2];
+	my $tiny = tinyurl($input);
+	my $reply;
+	$reply = title($input) . ' - ' . $tiny;
+	# reply
+	$irc->yield( privmsg => $chan => "$nick: $reply");
+}
+
+
+#END BotCommand subs
+sub irc_mode {
+	my ( $sender, $who, $where, $what, $extra ) = @_[ SENDER, ARG0 .. ARG3 ];
+	my $channel = $where;
+	if ( $what eq '+o' ) {
+		if ( $extra eq 'luxxorz' ) {
+			$irc->yield( privmsg => $channel => "I always hated that guy");
+		}
+	}
+}
+# reasons
+# 1 add ns to op entry
+# 2 ban
+# 3 add op entry
+# 4 if op, ban
+# 5 if op, unban
+# 6 if op, banlist
+
+sub irc_whois {
+	my $reply = $_[ARG0];
+#	$irc->yield( priivmsg => "brabo" => "$reply->{nick} test  $reply->{user}  $reply->{host}  $reply->{identified}");
+
+	my $nick = lc($reply->{nick});
+	my $unick = $reply->{nick};
+
+	my $why = $schema->resultset('Who')->find({ who => $nick });
+	if ($why) {
+		if ($why->reason == 1) {
+			my @founduser = $schema->resultset('Op')->search({ nick => $nick });
+			for (@founduser) {
+				my $nsaccount = $_->nsaccount;
+				unless ($nsaccount) {
+					$_->nsaccount($reply->{identified});
+					$_->update;
+				}
+			}
+			$why->delete;
+		} elsif ($why->reason == 2) {
+			my $ns = $reply->{identified};
+			my $founduser = $schema->resultset('Ban')->find({ nick => $why->who, channel => $why->channel });
+			#print ( "found usr is: $founduser->nick");
+			if ( $founduser ) {
+				unless ( $founduser->nsaccount ) {
+					$founduser->nsaccount($ns);
+					my $ban = "\$a:". $ns;
+					$founduser->ban($ban);
+					$founduser->update;
+				}
+				my $ban = $founduser->ban;
+				$irc->yield( mode => $founduser->channel => "+b $ban");
+				$irc->yield( kick => ($founduser->channel, $founduser->nick, "$founduser->reason") );
+			} else {
+				my $founduser = $schema->resultset('Ban')->find({ nsaccount => $ns, channel => $why->channel });
+				if ( $founduser ) {
+					my $ban = $founduser->ban;
+					$irc->yield( mode => $founduser->channel => "+b $ban");
+					$irc->yield( kick => ($founduser->channel, $founduser->nick, "NOT Welcome!") );
+				}
+			}
+			$why->delete;
+		} elsif ($why->reason == 3) {
+			my @founduser = $schema->resultset('Op')->search({ nick => $nick });
+			if (@founduser) {
+				my $whyns =$why->ns;
+				my $whychan = $why->channel;
+				my $whylevel = $why->level;
+				for (@founduser) {
+					my $nsaccount = $_->nsaccount;
+					my $channel = $_->channel;
+					if ( $nsaccount eq $whyns && $channel eq $whychan ) {
+						my $user = $why->user;
+						my $new = $schema->resultset('Op')->create({
+							nick => $user,
+							channel => $whychan,
+							level => $whylevel,
+						});
+						if ($why) {
+							$why->delete;
+						}
+						my $who = $schema->resultset('Who')->create({
+							who => $user,
+							reason => 1,
+						});
+						$irc->yield ( whois => $user );
+						
+					}
+				}
+			}
+
+			#if ($why->user) {
+			#	$why->delete;
+			#}
+
+		} elsif ($why->reason == 4) {
+			my $founduser = $schema->resultset('Op')->find({ nick => $nick, channel => $why->channel });
+			my $foundchan = $schema->resultset('Channel')->find({ channel => $why->channel });
+			if ($founduser) {
+				if ($foundchan) {
+					#$irc->yield( 'privmsg' => $foundchan->channel => "$foundchan->bans   $founduser->channel  $why->channel   $reply->{idntified}   $founduser->nsaccount" );
+					if ( $foundchan->bans == 1 && $founduser->channel eq $why->channel && lc($reply->{identified}) eq lc($founduser->nsaccount)) {
+						my $buser = $why->user;
+						my $newban = $schema->resultset('Ban')->create({
+							nick => $buser,
+							banner => $nick,
+#                       ban => "\$a:". $target,
+							channel => $why->channel,
+							reason => $why->breason,
+						});
+						if ($why) {
+							$why->delete;
+						}
+						my $who = $schema->resultset('Who')->create({
+							who => $buser,
+							reason => 2,
+							channel => $why->channel,
+						});
+						$irc->yield ( whois => $buser );
+					}
+				}
+			}
+		} elsif ($why->reason == 5) {
+			my $founduser = $schema->resultset('Op')->find({ nick => $nick, channel => $why->channel });
+			my $foundchan = $schema->resultset('Channel')->find({ channel => $why->channel });
+			if ($founduser) {
+				if ($foundchan) {
+					if ( $foundchan->bans == 1 && $founduser->channel eq $why->channel && $reply->{identified} eq $founduser->nsaccount) {
+						my $unban = $schema->resultset('Ban')->find({ nick => $why->user });
+						if ($unban) {
+							my $ubchan = $unban->channel;
+							my $ban = $unban->ban;
+							if ( $why->channel eq $ubchan ) {
+								$irc->yield( mode => $why->channel => "-b $ban" );
+								$unban->delete;
+							}
+						}
+					}
+				}
+			}
+			$why->delete;
+		} elsif ($why->reason == 6) {
+			my $founduser = $schema->resultset('Op')->find({ nick => $nick, channel => $why->channel });
+			if ($founduser ) {
+				if ( $founduser->nsaccount eq $reply->{identified} ) {
+					my @bans = $schema->resultset('Ban')->search({ channel => $why->channel });
+					if ($bans[0]) {
+						for (@bans) {
+							my $bnick = $_->nick;
+							my $ban = $_->ban;
+							my $reason = $_->reason;
+							$irc->yield( privmsg => $nick => "$bnick $ban $reason" );
+						}
+					}
+					for my $ban ( keys %{ $irc->channel_ban_list($why->channel) }) {
+						$irc->yield( privmsg => $nick => "$ban" );
+					}
+				}
+			}
+			$why->delete;
+		} elsif ($why->reason == 7) {
+			my $founduser = $schema->resultset('Op')->find({ nick => $nick, channel => $why->channel });
+			if ($founduser ) {
+				if ( $founduser->nsaccount eq $reply->{identified} ) {
+					for my $ban ( keys %{ $irc->channel_ban_list($why->channel) }) {
+						if ( $ban =~ /^\$a/ ) {
+							my $ns = $ban;
+							$ns =~ s/^\$a://;
+							my $foundban = $schema->resultset('Ban')->find({ nsaccount => $ns, channel => $why->channel });
+							unless ($foundban) {
+								my $newban = $schema->resultset('Ban')->create({
+									nick => $ns,
+									ban => $ban,
+									nsaccount => $ns,
+									channel => $why->channel,
+								});
+							}
+							$irc->yield( mode => $why->channel => "-b $ban" );
+#						$irc->yield( privmsg => $nick => "$ban" );
+						}
+					}
+				}
+			}
+			$why->delete;
+		} elsif ($why->reason == 8) {
+			my $founduser = $schema->resultset('Op')->find({ nick => $nick, channel => $why->channel });
+			if ($founduser ) {
+				if ( $founduser->nsaccount eq $reply->{identified} ) {
+					my @list = $schema->resultset('Ban')->search({ channel => $why->channel });
+					if (@list) {
+						for (@list) {
+							my $ban = $_->ban;
+							$irc->yield( mode => $why->channel => "+b $ban" );
+							$_->delete;
+						}
+					}
+				}
+			}
+
+		}
+	}
+	undef $why;
+	unless ($why) {
+		$why = $schema->resultset('Who')->find({ who => $nick });
+	}	
+	if ($why) {
+		$why->delete;
+	}
+
+#	my @founduser = $schema->resultset('Op')->search({ nick => $nick });
+#	for (@founduser) {
+#		my $nsaccount = $_->nsaccount;
+#		unless ($nsaccount) {
+#			$_->nsaccount($reply->{identified});
+#			$_->update;
+#		}
+#	}
+#
+#	my $founduser = $schema->resultset('Ban')->find({ nick => $nick });
+#	if ( $founduser ) {
+#		unless ( $founduser->nsaccount ) {
+#			$founduser->nsaccount($reply->{identified});
+#			my $ban = "\$a:". $reply->{identified};
+#			$founduser->ban($ban);
+#			$founduser->update;
+#
+#		}
+#		my $ban = $founduser->ban;
+#		$irc->yield( mode => $founduser->channel => "+b $ban");
+#	} else {
+#		my $founduser = $schema->resultset('Ban')->find({ nsaccount => $reply->{identified} });
+#		if ( $founduser ) {
+#			if ( $founduser->nsaccount eq $reply->{identified} ) {
+#				my $ban = $founduser->ban;
+#				$irc->yield( mode => $founduser->channel => "+b $ban");
+#			}
+#		}
+#	}
+}
+
+sub irc_public {
+        my ( $sender, $who, $where, $what, $extra ) = @_[ SENDER, ARG0 .. ARG3 ];
+        my $nick = ( split /!/, $who )[0];
+        my $channel = $where->[0];
+
+        $what =~ s/^(\+|\-)//;
+        if ( $what =~ /^(\w+)\+\+(\s|$)/ ) {
+                my $temp = lc($1);
+                my $temp2 = $1;
+                if ( lc($nick) =~ /^$temp$/) {
+                        $karma{$temp}--;
+		} elsif ( $temp =~ /^python$/ ) {
+			$karma{$temp}--;
+                } elsif ( ! ( $temp =~ /^weed$/ )) {
+                	$karma{$temp}++;
+		#} elsif ( $temp =~ /^weed$/ ) {
+		#	$karma{$temp}=420;
+		}
+		store \%karma, $cfg{karmafile};
+                $irc->yield( privmsg => $channel => "$nick: karma for $temp2 is now $karma{$temp}" );
+        }
+        if ( $what =~ /^(\w+)--(\s|$)/ ) {
+                my $temp = lc($1);
+		my $temp2 = $1;
+		if ( $temp =~ /^perl$/ ) {
+			$karma{$temp}++;
+		} elsif ( ! ( $temp =~ /^weed$/ )) {
+	                $karma{$temp}--;
+		}
+                store \%karma, $cfg{karmafile};
+                $irc->yield( privmsg => $channel => "$nick: karma for $temp2 is now $karma{$temp}" );
+        }
+        if ( $what =~ /^karma (\w+)$/ ) {
+                my $temp = lc($1);
+                if (! $karma{$temp}) {
+                        $karma{$temp} = 0;
+                }
+                $irc->yield( privmsg => $channel => "$nick: karma for $1 is: $karma{$temp}" );
+        }
+        if ( $what =~ /^karma$/ ) {
+                my $temp = lc($nick);
+                if (! $karma{$temp}) {
+                        $karma{$temp} = 0;
+                }
+                $irc->yield( privmsg => $channel => "$nick: karma for $nick is: $karma{$temp}" );
+        }
+        if ( $what =~ /^s\/(.+)\/(.+)/ ) {
+                my $temp1 = $1;
+                (my $temp2 = $2) =~ s/\/$//;
+		if ( $lastline{$channel} =~ /$temp1/ ) {
+	                $lastline{$channel} =~ s/$temp1/$temp2/g;
+        	        $irc->yield( privmsg => $channel => "$lastline{$channel}");
+		}
+		$what = $lastline{$channel};
+        }
+        if ( $what =~ /^luxxorz(\s|$)/ ) {
+                        $what =~ s/^luxxorz(\s)?//;
+                        &irc_bot_addressed("luxxorz",$nick,$channel,$what);
+        }
+        if ( $what =~ /^ddg / ) {
+                        $what =~ s/^ddg //;
+                        &irc_bot_addressed("luxxorz",$nick,$channel,$what);
+        }
+	#if ( $what =~ /^o/ ) {
+	#	if ( $extra eq 'luxxorz') {
+	#		$irc->yield( privmsg => $channel => "I always hated that guy");
+	#	}
+	#}
+        $lastline{$channel} = $what;
+        return;
+}
+
+sub irc_ctcp_action {
+	my $where = $_[ARG1];
+	my $channel = $where->[0];
+	my $line = $_[ARG2];
+	$lastline{$channel} = $line;
+}
+
+sub irc_bot_addressed {
+        my ( $self, $nick, $channel, $msg ) = @_;
+        $self =~ s/^\+//;
+        my $reply;
+        my $zci;
+	if (!$msg) {
+		$reply = "I'm here in version ".$VERSION ;
+	} elsif ($zci = WWW::DuckDuckGo->new->zci($msg)) {
+		if ($zci->has_answer) {
+			$reply = $zci->answer;
+			$reply .= " (".$zci->answer_type.")";
+		} elsif ($zci->has_definition) {
+			$reply = $zci->definition;
+			$reply .= " (".$zci->definition_source.")" if $zci->has_definition_source;
+		} elsif ($zci->has_abstract_text) {
+			$reply = $zci->abstract_text;
+			$reply .= " (".$zci->abstract_source.")" if $zci->has_abstract_source;
+		} elsif ($zci->has_heading) {
+			$reply = $zci->heading;
+		} else {
+			$reply = '<irc_sigfail:FAIL>';
+		}
+		$reply .= " ".$zci->definition_url if $zci->has_definition_url;
+		$reply .= " ".$zci->abstract_url if $zci->has_abstract_url;
+	} else {
+		$reply = '0 :(';
+	}
+	$reply = decode_entities($reply);
+	$irc->yield( privmsg => $channel => "$nick: $reply");
+}
+
+sub tinyurl {
+	my $input = shift;
+	my $reply;
+	if ($input =~ m/\ /) {
+		$reply = "error: a space in the URL";
+	} elsif ($input =~ m/^http(s)?\:\/\//){
+		if (length($input) < 22){
+			$reply = $input;
+		} else {
+			$reply = makeashorterlink($input);
+		}
+	} else {
+		$reply = "sorry, this is not an http[s] URL";
+	}
+	return $reply;
+}
+
+
+sub irc_console_service {
+	my $getsockname = $_[ARG0];
+	return;
+}
+
+sub irc_console_connect {
+	my ($peeradr, $peerport, $wheel_id) = @_[ARG0 .. ARG2];
+	return;
+}
+
+sub irc_console_authed {
+	my $wheel_id = $_[ARG0];
+	return;
+}
+
+sub irc_console_close {
+	my $wheel_id = $_[ARG0];
+	return;
+}
+
+sub irc_console_rw_fail {
+	my ($peeradr, $peerport) = @_[ARG0, ARG1];
+	return;
+}
+
+# We registered for all events, this will produce some debug info.
+sub _default {
+        my ( $event, $args ) = @_[ ARG0 .. $#_ ];
+        my @output = ("$event: ");
+        for my $arg (@$args) {
+                if ( ref $arg eq 'ARRAY' ) {
+                        push( @output, '[' . join( ', ', @$arg ) . ']' );
+                }
+                else {
+                        push( @output, "'$arg'" );
+                }
+        }
+        print join ' ', @output, "\n";
+        return;
+}
+
+
